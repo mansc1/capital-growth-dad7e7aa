@@ -27,6 +27,7 @@ export default function Transactions() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editTx, setEditTx] = useState<TransactionWithFund | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
