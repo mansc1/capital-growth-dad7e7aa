@@ -11,6 +11,7 @@ export interface Fund {
   category: string | null;
   asset_class: string | null;
   risk_level: number | null;
+  sec_fund_code: string | null;
   currency: string;
   is_active: boolean;
   created_at: string;

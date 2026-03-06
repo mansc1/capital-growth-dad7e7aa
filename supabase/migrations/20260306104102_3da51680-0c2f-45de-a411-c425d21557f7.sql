@@ -1,0 +1,1 @@
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
