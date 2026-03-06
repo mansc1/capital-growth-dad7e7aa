@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -5,6 +6,7 @@ import { formatCurrency, formatPercent, gainLossColor } from "@/lib/format";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
 import type { PortfolioSnapshot, ChartRange } from "@/types/portfolio";
 import { format, parseISO } from "date-fns";
+import { computeDailyReturns } from "@/analytics/returns";
 
 const ranges: ChartRange[] = ["1M", "3M", "ALL"];
 
@@ -18,9 +20,12 @@ interface Props {
 }
 
 export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, latestValue, returnPct }: Props) {
+  const dailyReturns = useMemo(() => computeDailyReturns(snapshots), [snapshots]);
+
   const chartData = snapshots.map((s) => ({
     date: s.snapshot_date,
     value: Number(s.total_value),
+    dailyReturn: dailyReturns.get(s.snapshot_date) ?? null,
   }));
 
   if (isLoading) {
@@ -93,6 +98,11 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
                     <div className="rounded-lg border bg-card px-3 py-2 shadow-md">
                       <p className="text-xs text-muted-foreground">{format(parseISO(d.date), "d MMM yyyy")}</p>
                       <p className="text-sm font-semibold">{formatCurrency(d.value)}</p>
+                      {d.dailyReturn !== null && (
+                        <p className={`text-xs font-medium ${gainLossColor(d.dailyReturn)}`}>
+                          Daily: {formatPercent(d.dailyReturn)}
+                        </p>
+                      )}
                     </div>
                   );
                 }}
