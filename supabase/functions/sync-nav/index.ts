@@ -27,6 +27,8 @@ Deno.serve(async (req) => {
   // Auth: validate x-cron-secret for both cron and manual triggers
   const cronSecretHeader = req.headers.get("x-cron-secret") ?? "";
 
+  
+
   if (!cronSecret || cronSecretHeader !== cronSecret) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
