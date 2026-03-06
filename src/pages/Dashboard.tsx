@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { usePortfolioSnapshots } from "@/hooks/use-portfolio-snapshots";
 import { useHoldings } from "@/hooks/use-holdings";
+import { useAllNavHistory } from "@/hooks/use-all-nav-history";
 import { AppLayout } from "@/components/AppLayout";
 import { PortfolioChart } from "@/components/dashboard/PortfolioChart";
+import { PortfolioTWRChart } from "@/components/dashboard/PortfolioTWRChart";
+import { FundPerformanceChart } from "@/components/dashboard/FundPerformanceChart";
 import { StatCards } from "@/components/dashboard/StatCards";
-import { TopPerformers } from "@/components/dashboard/TopPerformers";
 import { AllocationChart } from "@/components/dashboard/AllocationChart";
 import { HoldingsSummaryTable } from "@/components/dashboard/HoldingsSummaryTable";
 import { computePortfolioTWRForRange } from "@/analytics/returns";
@@ -15,6 +17,7 @@ export default function Dashboard() {
   const { data: snapshots, isLoading: snapshotsLoading } = usePortfolioSnapshots(chartRange);
   const { data: allSnapshots } = usePortfolioSnapshots("ALL");
   const { data: holdings, isLoading: holdingsLoading } = useHoldings();
+  const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange);
 
   const latestSnapshot = snapshots?.[snapshots.length - 1];
   const totalCost = holdings?.reduce((s, h) => s + h.total_cost, 0) ?? 0;
@@ -46,6 +49,19 @@ export default function Dashboard() {
           returnPct={totalReturnPct}
         />
 
+        <PortfolioTWRChart
+          snapshots={allSnapshots ?? []}
+          isLoading={snapshotsLoading}
+          range={chartRange}
+        />
+
+        <FundPerformanceChart
+          navHistory={navHistory ?? []}
+          holdings={holdings ?? []}
+          isLoading={holdingsLoading || navLoading}
+          range={chartRange}
+        />
+
         <StatCards
           totalCost={totalCost}
           totalValue={totalValue}
@@ -54,8 +70,6 @@ export default function Dashboard() {
           twrPct={twrPct}
           isLoading={holdingsLoading}
         />
-
-        <TopPerformers holdings={holdings ?? []} isLoading={holdingsLoading} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <AllocationChart holdings={holdings ?? []} isLoading={holdingsLoading} />
