@@ -171,7 +171,20 @@ export function FundDrawer({ open, onClose, editFund }: Props) {
               name="sec_fund_code"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>SEC Fund Code (for NAV sync)</FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>SEC Fund Code (for NAV sync)</FormLabel>
+                    <SecFundSearchPopover
+                      onSelect={(result: SecFundResult) => {
+                        form.setValue("sec_fund_code", result.proj_abbr_name);
+                        if (!form.getValues("fund_name")) {
+                          form.setValue("fund_name", result.proj_name_en ?? result.proj_name_th ?? "");
+                        }
+                        if (!form.getValues("amc_name") && result.amc_name) {
+                          form.setValue("amc_name", result.amc_name);
+                        }
+                      }}
+                    />
+                  </div>
                   <FormControl>
                     <Input placeholder="e.g. KFAFIX-A" {...field} />
                   </FormControl>

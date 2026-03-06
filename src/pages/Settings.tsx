@@ -143,6 +143,21 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">SEC Fund Directory</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Refresh the cached SEC Thailand fund directory. This crawls all AMCs from the SEC API and stores the fund list locally for fast search when assigning SEC fund codes.
+            </p>
+            <Button onClick={handleRefreshDirectory} disabled={refreshingDirectory} size="sm">
+              <Database className={`h-4 w-4 mr-2 ${refreshingDirectory ? "animate-pulse" : ""}`} />
+              {refreshingDirectory ? "Refreshing…" : "Refresh SEC Directory"}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );
