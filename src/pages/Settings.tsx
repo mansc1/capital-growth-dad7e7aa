@@ -21,7 +21,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 const SHOW_DEV_TOOLS = import.meta.env.VITE_ENABLE_DEV_TOOLS === "true";
