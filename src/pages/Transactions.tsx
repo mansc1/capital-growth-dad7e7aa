@@ -153,6 +153,7 @@ export default function Transactions() {
           }
         }}
       />
+      <ImportCsvDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </AppLayout>
   );
 }
