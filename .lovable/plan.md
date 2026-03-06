@@ -1,55 +1,33 @@
 
 
-# Implementation Plan: TWR Charts & Fund Performance Comparison
+# Improve Dashboard Metric Labels & UX
 
-## Summary
-Remove TopPerformers, add Portfolio TWR chart and Fund Performance multi-line chart. New dashboard order: Portfolio Value → Portfolio TWR → Fund Performance → StatCards → Allocation + Holdings table.
+## Single file change: `src/components/dashboard/StatCards.tsx`
 
-## Files to Create
+### Rename labels & reorder
+- "Gain / Loss" → **"Unrealized Gain"**
+- "Return" → **"Investor Return (MWR)"**
+- "Total Return (TWR)" → **"Portfolio Return (TWR)"**
+- Order: Total Value → Total Cost → Unrealized Gain → Investor Return (MWR) → Portfolio Return (TWR)
 
-### 1. `src/analytics/returns.ts` — Add two series helpers
+### Add helper text (two return cards only)
+- MWR: "Your personal return based on money invested."
+- TWR: "Performance independent of deposits or withdrawals."
+- Rendered as `text-[10px] text-muted-foreground mt-1`
 
-**`computePortfolioTWRSeries(snapshots, startDate?)`**
-- Sort snapshots by date, filter by startDate
-- Build cumulative TWR array: `{ date, twrPct, value, dailyReturnPct }`
-- First point has twrPct=0, then `product *= (1 + dailyReturn)`, `twrPct = (product-1)*100`
+### Add info icon tooltips (two return cards only)
+- Import `Info` from lucide-react, `Tooltip` components from `@/components/ui/tooltip`
+- 12px `Info` icon beside label, `cursor-help`
+- MWR tooltip: "Return on your invested capital based on how much you put in."
+- TWR tooltip: "Portfolio performance excluding the impact of cash flows."
 
-**`computeFundReturnSeries(navHistory, heldFundIds, fundIdToCode, startDate?)`**
-- Group NAV by fund_id, filter to heldFundIds only
-- For each fund: filter by startDate, normalize from first NAV: `(NAV/NAV_start - 1) * 100`
-- Skip funds with <2 data points in range
-- Merge all funds into unified date rows: `{ date, [fundCode]: returnPct }`
-- Return `{ data: row[], fundCodes: string[] }`
+### Prevent label wrapping
+- Add `whitespace-nowrap` to label `<p>` element
+- Add `shrink-0` to icon elements
 
-### 2. `src/hooks/use-all-nav-history.ts`
-- Fetches all NAV history with optional date range filter based on ChartRange
-- Query key: `['all_nav_history', range]`
-
-### 3. `src/components/dashboard/PortfolioTWRChart.tsx`
-- AreaChart showing cumulative TWR (%) over time
-- Y-axis in percentage, tooltip: date, TWR%, value, daily return%
-- Empty state if <2 data points
-
-### 4. `src/components/dashboard/FundPerformanceChart.tsx`
-- Multi-line LineChart, one Line per held fund
-- Uses `hsl(var(--chart-1))` through `--chart-5` for colors
-- Clickable legend toggles line visibility (local state)
-- Sorted alphabetically by fund_code
-- Tooltip: date + each fund return%
-- Clean empty state if no funds have sufficient data
-
-## Files to Modify
-
-### 5. `src/pages/Dashboard.tsx`
-- Remove TopPerformers import/usage
-- Add imports for new charts + `useAllNavHistory`
-- Build `heldFundIds` and `fundIdToCode` from holdings
-- New order: PortfolioChart → PortfolioTWRChart → FundPerformanceChart → StatCards → Allocation+Holdings → footer
-
-## Files to Delete
-
-### 6. `src/components/dashboard/TopPerformers.tsx`
-- No longer needed
-
-## No database changes required.
+### Implementation
+- Extend stats array items with optional `helperText?: string` and `tooltip?: string` fields
+- Wrap card grid in `<TooltipProvider>`
+- Conditionally render helper text and tooltip based on field presence
+- No changes to props, calculations, or other files
 
