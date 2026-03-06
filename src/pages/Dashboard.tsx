@@ -1,20 +1,19 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { usePortfolioSnapshots } from "@/hooks/use-portfolio-snapshots";
 import { useHoldings } from "@/hooks/use-holdings";
 import { AppLayout } from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatPercent, gainLossColor, gainLossBg } from "@/lib/format";
 import { PortfolioChart } from "@/components/dashboard/PortfolioChart";
 import { StatCards } from "@/components/dashboard/StatCards";
 import { TopPerformers } from "@/components/dashboard/TopPerformers";
 import { AllocationChart } from "@/components/dashboard/AllocationChart";
 import { HoldingsSummaryTable } from "@/components/dashboard/HoldingsSummaryTable";
+import { computePortfolioTWRForRange } from "@/analytics/returns";
 import type { ChartRange } from "@/types/portfolio";
 
 export default function Dashboard() {
   const [chartRange, setChartRange] = useState<ChartRange>("ALL");
   const { data: snapshots, isLoading: snapshotsLoading } = usePortfolioSnapshots(chartRange);
+  const { data: allSnapshots } = usePortfolioSnapshots("ALL");
   const { data: holdings, isLoading: holdingsLoading } = useHoldings();
 
   const latestSnapshot = snapshots?.[snapshots.length - 1];
@@ -22,6 +21,11 @@ export default function Dashboard() {
   const totalValue = holdings?.reduce((s, h) => s + h.market_value, 0) ?? 0;
   const totalGainLoss = totalValue - totalCost;
   const totalReturnPct = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
+
+  const twrPct = useMemo(() => {
+    if (!allSnapshots || allSnapshots.length < 2) return undefined;
+    return computePortfolioTWRForRange(allSnapshots, chartRange).totalReturnPct;
+  }, [allSnapshots, chartRange]);
 
   return (
     <AppLayout>
@@ -47,6 +51,7 @@ export default function Dashboard() {
           totalValue={totalValue}
           gainLoss={totalGainLoss}
           returnPct={totalReturnPct}
+          twrPct={twrPct}
           isLoading={holdingsLoading}
         />
 

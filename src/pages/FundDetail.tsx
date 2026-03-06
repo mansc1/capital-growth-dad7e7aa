@@ -1,4 +1,5 @@
-import { useParams } from "react-router-dom";
+import { useMemo } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useFund } from "@/hooks/use-funds";
 import { useNavHistory } from "@/hooks/use-nav-history";
 import { useTransactions } from "@/hooks/use-transactions";
@@ -8,12 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatPercent, formatNumber, formatDate, gainLossColor, gainLossBg } from "@/lib/format";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
-import { format, parseISO, subMonths } from "date-fns";
-import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { formatCurrency, formatPercent, formatNumber, formatDate, gainLossColor } from "@/lib/format";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
+import { format, parseISO } from "date-fns";
+import { ArrowLeft } from "lucide-react";
+import { computeFundReturnPeriods } from "@/analytics/returns";
 
 export default function FundDetail() {
   const { id } = useParams<{ id: string }>();
@@ -25,21 +26,28 @@ export default function FundDetail() {
 
   const holding = allHoldings?.find((h) => h.fund.id === id);
 
-  // Performance calcs
-  const latestNav = navHistory?.[navHistory.length - 1]?.nav_per_unit ?? 0;
-  const now = new Date();
-  const nav1m = navHistory?.find((n) => n.nav_date >= subMonths(now, 1).toISOString().split("T")[0]);
-  const nav3m = navHistory?.find((n) => n.nav_date >= subMonths(now, 3).toISOString().split("T")[0]);
-  const firstNav = navHistory?.[0];
+  // Find the earliest buy transaction date for "Since First Buy"
+  const firstBuyDate = useMemo(() => {
+    if (!transactions) return undefined;
+    const buys = transactions.filter((t) => t.tx_type === 'buy' || t.tx_type === 'switch_in');
+    if (buys.length === 0) return undefined;
+    return buys.reduce((earliest, t) =>
+      t.trade_date < earliest ? t.trade_date : earliest,
+      buys[0].trade_date
+    );
+  }, [transactions]);
 
-  const calcReturn = (from: number | undefined) =>
-    from && from > 0 ? ((latestNav - from) / from) * 100 : null;
-
-  const returns = [
-    { label: "1M", value: calcReturn(nav1m ? Number(nav1m.nav_per_unit) : undefined) },
-    { label: "3M", value: calcReturn(nav3m ? Number(nav3m.nav_per_unit) : undefined) },
-    { label: "Since First Buy", value: calcReturn(firstNav ? Number(firstNav.nav_per_unit) : undefined) },
-  ];
+  // TWR-based returns using analytics module
+  const returns = useMemo(() => {
+    if (!navHistory || navHistory.length < 2) {
+      return [
+        { label: '1M', value: null },
+        { label: '3M', value: null },
+        { label: 'Since First Buy', value: null },
+      ];
+    }
+    return computeFundReturnPeriods(navHistory, firstBuyDate);
+  }, [navHistory, firstBuyDate]);
 
   const chartData = (navHistory ?? []).map((n) => ({
     date: n.nav_date,
@@ -89,7 +97,7 @@ export default function FundDetail() {
           </CardContent>
         </Card>
 
-        {/* Performance row */}
+        {/* Performance row - NAV-based TWR */}
         <div className="grid grid-cols-3 gap-4">
           {returns.map((r) => (
             <Card key={r.label}>
