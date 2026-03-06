@@ -1,36 +1,57 @@
 
 
-# Manage Funds — Final Implementation Plan
+# Refactor: Inline Fund Creation in Transaction Flow
 
-## Adjustment: sync-nav fund identity
+## Delete 3 files
+- `src/pages/ManageFunds.tsx`
+- `src/components/funds/FundDrawer.tsx`
+- `src/components/funds/ArchiveConfirmDialog.tsx`
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+## Create 2 files
 
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
-
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
-
-## Everything else — unchanged from approved plan
-
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+### `src/hooks/use-active-funds.ts`
+Query active funds directly from database:
+```ts
+supabase.from('funds').select('*').eq('is_active', true).order('fund_code')
 ```
+Query key: `['funds', 'active']`
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+### `src/hooks/use-ensure-fund.ts`
+`useMutation`-based hook taking a `SecFundResult`. Steps:
+1. Normalize: `const norm = result.proj_abbr_name.trim().toUpperCase()`
+2. Fetch all funds, find match where `sec_fund_code?.trim().toUpperCase() === norm` OR `fund_code.trim().toUpperCase() === norm`
+3. If found → return existing fund ID
+4. If not → insert new fund (`fund_code = proj_abbr_name`, `sec_fund_code = proj_abbr_name`, `fund_name = proj_name_en || proj_name_th`, `amc_name`, `is_active: true`, `currency: THB`, nulls for category/asset_class/risk_level)
+5. `await queryClient.invalidateQueries({ queryKey: ['funds'] })` and `await queryClient.invalidateQueries({ queryKey: ['funds', 'active'] })`
+6. Return the fund ID
 
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+## Modify 5 files
+
+### `src/App.tsx`
+- Remove `ManageFunds` import and `/funds/manage` route
+
+### `src/components/AppSidebar.tsx`
+- Remove "Manage Funds" from `navItems`, remove `FolderCog` import
+- Simplify `isActive` logic (remove the `/funds/manage` special case)
+
+### `src/components/transactions/TransactionDrawer.tsx`
+- Replace `useFunds` with `useActiveFunds`
+- Add "Add from SEC Directory" button next to the fund Select dropdown
+- Import `SecFundSearchPopover` and `useEnsureFund`
+- When SEC result selected: call `ensureFund(result)` → set `fund_id` to returned ID
+- Track a `newFundLabel` in local state so the dropdown shows the fund name before the query refetches
+
+### `src/pages/Dashboard.tsx`
+- After loading checks, if `!holdingsLoading && (!holdings || holdings.length === 0)`, early return with empty state:
+  - Title: "No portfolio data yet"
+  - Body: "Start by adding your first transaction and selecting a fund from the SEC directory."
+  - CTA: Button navigating to `/transactions?add=1`
+- This replaces charts/cards entirely for empty state (early return pattern per user's request)
+
+### `src/pages/Holdings.tsx`
+- Update empty state text and add CTA button navigating to `/transactions?add=1`
+
+### `src/pages/Transactions.tsx`
+- Read `?add=1` from URL on mount → open drawer, then `navigate('/transactions', { replace: true })` to clear param
+- Update empty state text: "No transactions yet" / "Record your first buy, sell, or dividend transaction to start tracking your portfolio." / CTA opens drawer directly
 
