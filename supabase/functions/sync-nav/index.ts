@@ -15,7 +15,6 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const cronSecret = Deno.env.get("NAV_SYNC_CRON_SECRET") ?? "";
 
   // Determine trigger type from body
@@ -25,37 +24,14 @@ Deno.serve(async (req) => {
     if (body?.trigger_type) triggerType = body.trigger_type;
   } catch { /* no body is fine */ }
 
-  // Auth: either valid user JWT or cron secret header
-  const authHeader = req.headers.get("Authorization") ?? "";
+  // Auth: validate x-cron-secret for both cron and manual triggers
   const cronSecretHeader = req.headers.get("x-cron-secret") ?? "";
 
-  if (triggerType === "cron") {
-    // Cron requests must provide the secret
-    if (!cronSecret || cronSecretHeader !== cronSecret) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-  } else {
-    // Manual requests must have a valid user
-    if (!authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
+  if (!cronSecret || cronSecretHeader !== cronSecret) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-    const token = authHeader.replace("Bearer ", "");
-    const { error: claimsErr } = await userClient.auth.getClaims(token);
-    if (claimsErr) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
   }
 
   // Use service role client for all DB operations
