@@ -49,7 +49,7 @@ interface Props {
 }
 
 export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
-  const { data: funds } = useFunds();
+  const { data: funds } = useActiveFunds();
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
   const [navNotFound, setNavNotFound] = useState(false);
