@@ -50,9 +50,14 @@ export default function Transactions() {
               All buy, sell, and dividend transactions
             </p>
           </div>
-          <Button onClick={() => { setEditTx(null); setDrawerOpen(true); }} size="sm">
-            <Plus className="h-4 w-4 mr-1" /> Add Transaction
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-1" /> Import CSV
+            </Button>
+            <Button onClick={() => { setEditTx(null); setDrawerOpen(true); }} size="sm">
+              <Plus className="h-4 w-4 mr-1" /> Add Transaction
+            </Button>
+          </div>
         </div>
 
         <Card>
