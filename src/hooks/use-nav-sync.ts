@@ -12,6 +12,7 @@ interface SyncResult {
   skippedFunds: number;
   latestNavDate: string | null;
   syncRunId: string;
+  provider?: string;
   errors: string[];
 }
 

@@ -13,6 +13,7 @@ interface SyncRun {
   updated_count: number;
   skipped_count: number;
   error_message: string | null;
+  provider: string;
   created_at: string;
 }
 

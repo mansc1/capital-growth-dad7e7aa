@@ -17,18 +17,15 @@ Deno.serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const cronSecret = Deno.env.get("NAV_SYNC_CRON_SECRET") ?? "";
 
-  // Determine trigger type from body
+  // Determine trigger type
   let triggerType = "manual";
   try {
     const body = await req.clone().json();
     if (body?.trigger_type) triggerType = body.trigger_type;
   } catch { /* no body is fine */ }
 
-  // Auth: validate x-cron-secret for both cron and manual triggers
+  // Auth
   const cronSecretHeader = req.headers.get("x-cron-secret") ?? "";
-
-  
-
   if (!cronSecret || cronSecretHeader !== cronSecret) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
@@ -36,8 +33,49 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Use service role client for all DB operations
   const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+  // Resolve provider early so we know the name even if construction throws
+  let providerName = "unknown";
+  let providerInstance: ReturnType<typeof getNavProvider>["provider"] | null = null;
+
+  try {
+    const result = getNavProvider();
+    providerInstance = result.provider;
+    providerName = result.providerName;
+  } catch (providerErr) {
+    // Provider construction failed (e.g. missing SEC_API_KEY)
+    const errorMsg = (providerErr as Error).message;
+    // Try to determine provider name from env even on failure
+    providerName = Deno.env.get("NAV_PROVIDER") ?? "unknown";
+
+    // Still create a sync_runs row so the failure is visible
+    try {
+      await supabase.from("sync_runs").insert({
+        job_name: "nav_sync",
+        trigger_type: triggerType,
+        status: "failed",
+        provider: providerName,
+        completed_at: new Date().toISOString(),
+        error_message: errorMsg,
+      });
+    } catch { /* best effort */ }
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        processedFunds: 0,
+        insertedRows: 0,
+        updatedRows: 0,
+        skippedFunds: 0,
+        latestNavDate: null,
+        syncRunId: null,
+        provider: providerName,
+        errors: [errorMsg],
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
 
   let syncRunId = "";
   const errors: string[] = [];
@@ -48,13 +86,14 @@ Deno.serve(async (req) => {
   let latestNavDate: string | null = null;
 
   try {
-    // 1. Create sync_runs row
+    // 1. Create sync_runs row immediately
     const { data: syncRun, error: syncErr } = await supabase
       .from("sync_runs")
       .insert({
         job_name: "nav_sync",
         trigger_type: triggerType,
         status: "running",
+        provider: providerName,
       })
       .select("id")
       .single();
@@ -72,27 +111,43 @@ Deno.serve(async (req) => {
     if (!funds || funds.length === 0) {
       await supabase
         .from("sync_runs")
-        .update({ status: "success", completed_at: new Date().toISOString(), processed_count: 0 })
+        .update({ status: "success", completed_at: new Date().toISOString(), processed_count: 0, provider: providerName })
         .eq("id", syncRunId);
 
       return new Response(
-        JSON.stringify({ success: true, processedFunds: 0, insertedRows: 0, updatedRows: 0, skippedFunds: 0, latestNavDate: null, syncRunId, errors: [] }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: true, processedFunds: 0, insertedRows: 0, updatedRows: 0, skippedFunds: 0, latestNavDate: null, syncRunId, provider: providerName, errors: [] }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // Build fund_code -> fund_id map
     const codeToId: Record<string, string> = {};
-    for (const f of funds) {
-      codeToId[f.fund_code] = f.id;
-    }
+    for (const f of funds) codeToId[f.fund_code] = f.id;
 
     // 3. Fetch NAV data
-    const provider = getNavProvider();
     const fundCodes = funds.map((f: { fund_code: string }) => f.fund_code);
-    const navResults = await provider.fetchLatestNavForFunds(fundCodes);
 
-    // Build lookup of fetched results
+    let navResults;
+    try {
+      navResults = await providerInstance!.fetchLatestNavForFunds(fundCodes);
+    } catch (providerErr) {
+      const errorMsg = `Provider "${providerName}" failed: ${(providerErr as Error).message}`;
+      await supabase
+        .from("sync_runs")
+        .update({
+          status: "failed",
+          completed_at: new Date().toISOString(),
+          error_message: errorMsg,
+          provider: providerName,
+        })
+        .eq("id", syncRunId);
+
+      return new Response(
+        JSON.stringify({ success: false, processedFunds: 0, insertedRows: 0, updatedRows: 0, skippedFunds: 0, latestNavDate: null, syncRunId, provider: providerName, errors: [errorMsg] }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const fetchedCodes = new Set(navResults.map((r) => r.fundCode));
 
     // 4. Process each fund
@@ -122,7 +177,6 @@ Deno.serve(async (req) => {
       }
 
       try {
-        // Check existing row for explicit counting
         const { data: existing } = await supabase
           .from("nav_history")
           .select("id, nav_per_unit")
@@ -134,35 +188,19 @@ Deno.serve(async (req) => {
 
         if (existing) {
           if (existing.nav_per_unit === navResult.navPerUnit) {
-            // Same NAV, skip
             skippedFunds++;
           } else {
-            // Different NAV, update
             const { error: updateErr } = await supabase
               .from("nav_history")
-              .update({
-                nav_per_unit: navResult.navPerUnit,
-                source: navResult.source,
-                fetched_at: now,
-                updated_at: now,
-              })
+              .update({ nav_per_unit: navResult.navPerUnit, source: navResult.source, fetched_at: now, updated_at: now })
               .eq("id", existing.id);
-
             if (updateErr) throw updateErr;
             updatedRows++;
           }
         } else {
-          // New row, insert
           const { error: insertErr } = await supabase
             .from("nav_history")
-            .insert({
-              fund_id: fundId,
-              nav_date: navResult.navDate,
-              nav_per_unit: navResult.navPerUnit,
-              source: navResult.source,
-              fetched_at: now,
-            });
-
+            .insert({ fund_id: fundId, nav_date: navResult.navDate, nav_per_unit: navResult.navPerUnit, source: navResult.source, fetched_at: now });
           if (insertErr) throw insertErr;
           insertedRows++;
         }
@@ -197,48 +235,26 @@ Deno.serve(async (req) => {
         updated_count: updatedRows,
         skipped_count: skippedFunds,
         error_message: errors.length > 0 ? errors.join("; ") : null,
+        provider: providerName,
       })
       .eq("id", syncRunId);
 
     return new Response(
-      JSON.stringify({
-        success: errors.length === 0,
-        processedFunds,
-        insertedRows,
-        updatedRows,
-        skippedFunds,
-        latestNavDate,
-        syncRunId,
-        errors,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: errors.length === 0, processedFunds, insertedRows, updatedRows, skippedFunds, latestNavDate, syncRunId, provider: providerName, errors }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     const message = (err as Error).message;
-    // Try to mark sync_run as failed
     if (syncRunId) {
       await supabase
         .from("sync_runs")
-        .update({
-          status: "failed",
-          completed_at: new Date().toISOString(),
-          error_message: message,
-        })
+        .update({ status: "failed", completed_at: new Date().toISOString(), error_message: message, provider: providerName })
         .eq("id", syncRunId);
     }
 
     return new Response(
-      JSON.stringify({
-        success: false,
-        processedFunds,
-        insertedRows,
-        updatedRows,
-        skippedFunds,
-        latestNavDate,
-        syncRunId,
-        errors: [message, ...errors],
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: false, processedFunds, insertedRows, updatedRows, skippedFunds, latestNavDate, syncRunId, provider: providerName, errors: [message, ...errors] }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
