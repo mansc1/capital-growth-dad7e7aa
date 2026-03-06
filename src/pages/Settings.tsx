@@ -8,13 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { RefreshCw, CheckCircle2, XCircle, Clock, Database } from "lucide-react";
 import { useNavSync } from "@/hooks/use-nav-sync";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
+import { useActiveFunds } from "@/hooks/use-funds";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
   const { syncNav, isLoading: syncing } = useNavSync();
   const { lastSuccess, latestRun, isLoading: syncLoading } = useLastSuccessfulSync();
+  const { data: activeFunds, isLoading: fundsLoading } = useActiveFunds();
   const [refreshingDirectory, setRefreshingDirectory] = useState(false);
+
+  const hasActiveFunds = !fundsLoading && activeFunds && activeFunds.length > 0;
 
   const handleRefreshDirectory = async () => {
     setRefreshingDirectory(true);
@@ -137,10 +141,17 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <Button onClick={handleSync} disabled={syncing} size="sm" className="mt-2">
-              <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
-              {syncing ? "Syncing…" : "Sync NAV Now"}
-            </Button>
+            <div className="space-y-2 mt-2">
+              <Button onClick={handleSync} disabled={syncing || !hasActiveFunds} size="sm">
+                <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+                {syncing ? "Syncing…" : "Sync NAV Now"}
+              </Button>
+              {!hasActiveFunds && (
+                <p className="text-xs text-muted-foreground">
+                  No active funds available for NAV sync.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 

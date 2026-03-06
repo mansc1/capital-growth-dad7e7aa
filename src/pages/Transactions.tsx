@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTransactions, useDeleteTransaction } from "@/hooks/use-transactions";
+import { useActiveFunds } from "@/hooks/use-funds";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatNumber, formatDate } from "@/lib/format";
 import { Plus, Pencil, Trash2, ArrowLeftRight } from "lucide-react";
@@ -21,11 +22,15 @@ const txBadgeVariant: Record<string, string> = {
 };
 
 export default function Transactions() {
+  const navigate = useNavigate();
   const { data: transactions, isLoading } = useTransactions();
+  const { data: activeFunds, isLoading: fundsLoading } = useActiveFunds();
   const deleteMutation = useDeleteTransaction();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editTx, setEditTx] = useState<TransactionWithFund | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const hasActiveFunds = !fundsLoading && activeFunds && activeFunds.length > 0;
 
   return (
     <AppLayout>
@@ -37,7 +42,12 @@ export default function Transactions() {
               All buy, sell, and dividend transactions
             </p>
           </div>
-          <Button onClick={() => { setEditTx(null); setDrawerOpen(true); }} size="sm">
+          <Button
+            onClick={() => { setEditTx(null); setDrawerOpen(true); }}
+            size="sm"
+            disabled={!hasActiveFunds}
+            title={!hasActiveFunds ? "Add a fund first before recording transactions" : undefined}
+          >
             <Plus className="h-4 w-4 mr-1" /> Add Transaction
           </Button>
         </div>
@@ -104,10 +114,25 @@ export default function Transactions() {
                 </Table>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <ArrowLeftRight className="h-12 w-12 mb-4 opacity-30" />
-                <p className="text-sm font-medium">No transactions yet</p>
-                <p className="text-xs mt-1">Click "Add Transaction" to record your first trade</p>
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <ArrowLeftRight className="h-12 w-12 mb-4 text-muted-foreground/40" />
+                <h3 className="text-lg font-medium text-foreground">No transactions yet</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  {hasActiveFunds
+                    ? "Record your first buy, sell, or dividend transaction to start tracking your portfolio."
+                    : "Add a fund first, then record your first transaction to start tracking your portfolio."}
+                </p>
+                <div className="flex items-center gap-3 mt-4">
+                  {hasActiveFunds ? (
+                    <Button onClick={() => { setEditTx(null); setDrawerOpen(true); }}>
+                      <Plus className="h-4 w-4 mr-1" /> Add Transaction
+                    </Button>
+                  ) : (
+                    <Button onClick={() => navigate("/funds/manage")}>
+                      <Plus className="h-4 w-4 mr-1" /> Add Fund
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>
