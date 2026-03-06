@@ -7,9 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatNumber, formatDate } from "@/lib/format";
-import { Plus, Pencil, Trash2, ArrowLeftRight } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowLeftRight, Upload } from "lucide-react";
 import { TransactionDrawer } from "@/components/transactions/TransactionDrawer";
 import { DeleteConfirmDialog } from "@/components/transactions/DeleteConfirmDialog";
+import { ImportCsvDialog } from "@/components/transactions/ImportCsvDialog";
 import type { TransactionWithFund } from "@/types/portfolio";
 
 const txBadgeVariant: Record<string, string> = {
