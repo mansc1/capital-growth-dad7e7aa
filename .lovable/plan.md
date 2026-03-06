@@ -1,57 +1,36 @@
 
 
-## Clean Empty State Implementation
+# Manage Funds — Final Implementation Plan
 
-### 1. Database Migration — Archive Demo Funds
-Archive the 5 demo funds by setting `is_active = false`:
+## Adjustment: sync-nav fund identity
+
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
+
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
+
+## Everything else — unchanged from approved plan
+
+### Migration
 ```sql
-UPDATE public.funds SET is_active = false 
-WHERE fund_code IN ('SCBSET', 'KFGTECH-A', 'B-INNOTECH', 'ONE-UGG-RA', 'KKP PGE-H') 
-  AND is_active = true;
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
 ```
 
-### 2. `src/hooks/use-funds.ts` — Add `useActiveFunds()`
-Add a new hook that filters `is_active = true`. Used by TransactionDrawer and Transactions page to check fund availability.
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
 
-### 3. `src/components/transactions/TransactionDrawer.tsx`
-Change fund selector from `useFunds()` to `useActiveFunds()` so archived funds don't appear.
-
-### 4. `src/pages/Dashboard.tsx` — Empty State
-Check `holdings` (after loading) — if no active holdings exist, show empty state instead of charts:
-- Title: "No portfolio data yet"  
-- Body: "Start by adding your first fund and recording your first transaction."
-- CTAs: "Add Fund" → `/funds/manage`, "Add Transaction" → `/transactions`
-
-The check is based on absence of active holdings (`!holdings || holdings.length === 0`), not on holdings + snapshots both being empty.
-
-### 5. `src/pages/Holdings.tsx` — Upgrade Empty State
-Replace the minimal existing empty state with CTAs:
-- Title: "No holdings yet"
-- Body: "Once you add funds and record transactions, your holdings will appear here."
-- CTAs: "Add Fund" → `/funds/manage`, "Add Transaction" → `/transactions`
-
-### 6. `src/pages/Transactions.tsx` — Empty State + No-Funds Guard
-- Import `useActiveFunds()` to check if active funds exist
-- In header: disable "Add Transaction" button when no active funds, show tooltip/title guidance
-- In empty state: if no active funds, adjust message to guide user to add a fund first; if funds exist, show standard "Add Transaction" CTA
-- Empty state copy: "No transactions yet" / "Record your first buy, sell, or dividend transaction to start tracking your portfolio."
-
-### 7. `src/pages/Settings.tsx` — Graceful No-Funds Sync
-Import `useActiveFunds()`. When no active funds exist, show a subtle note below the sync button: "No active funds available for NAV sync."
-
-### 8. `src/pages/ManageFunds.tsx` — Minor Polish
-The existing empty state already matches spec well. Adjust copy to exactly match: "Add your first fund to start building your portfolio tracker."
-
-### Files Changed
-
-| File | Change |
-|------|--------|
-| Migration SQL | Archive 5 demo funds |
-| `src/hooks/use-funds.ts` | Add `useActiveFunds()` |
-| `src/components/transactions/TransactionDrawer.tsx` | Use `useActiveFunds()` |
-| `src/pages/Dashboard.tsx` | Add empty state based on holdings absence |
-| `src/pages/Holdings.tsx` | Upgrade empty state with CTAs |
-| `src/pages/Transactions.tsx` | Add no-funds guard, upgrade empty state |
-| `src/pages/Settings.tsx` | Add no-funds hint |
-| `src/pages/ManageFunds.tsx` | Minor copy adjustment |
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 

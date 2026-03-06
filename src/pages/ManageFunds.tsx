@@ -118,7 +118,7 @@ export default function ManageFunds() {
           <div className="border rounded-lg p-12 text-center space-y-3">
             <FolderCog className="h-12 w-12 mx-auto text-muted-foreground/50" />
             <h3 className="text-lg font-medium text-foreground">No funds added yet</h3>
-            <p className="text-sm text-muted-foreground">Add your first fund to get started.</p>
+            <p className="text-sm text-muted-foreground">Add your first fund to start building your portfolio tracker.</p>
             <Button onClick={openAdd}>
               <Plus className="h-4 w-4 mr-1" /> Add Your First Fund
             </Button>

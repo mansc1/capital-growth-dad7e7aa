@@ -1,12 +1,13 @@
 import { useHoldings } from "@/hooks/use-holdings";
+import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatCurrency, formatPercent, formatNumber, gainLossColor } from "@/lib/format";
-import { useNavigate } from "react-router-dom";
-import { Briefcase } from "lucide-react";
+import { Briefcase, Plus, ArrowLeftRight } from "lucide-react";
 
 export default function Holdings() {
   const { data: holdings, isLoading } = useHoldings();
@@ -81,10 +82,20 @@ export default function Holdings() {
                 </Table>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <Briefcase className="h-12 w-12 mb-4 opacity-30" />
-                <p className="text-sm font-medium">No holdings yet</p>
-                <p className="text-xs mt-1">Add a transaction to get started</p>
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Briefcase className="h-12 w-12 mb-4 text-muted-foreground/40" />
+                <h3 className="text-lg font-medium text-foreground">No holdings yet</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  Once you add funds and record transactions, your holdings will appear here.
+                </p>
+                <div className="flex items-center gap-3 mt-4">
+                  <Button onClick={() => navigate("/funds/manage")}>
+                    <Plus className="h-4 w-4 mr-1" /> Add Fund
+                  </Button>
+                  <Button variant="outline" onClick={() => navigate("/transactions")}>
+                    <ArrowLeftRight className="h-4 w-4 mr-1" /> Add Transaction
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
