@@ -26,6 +26,11 @@ export default function Dashboard() {
   const { lastSuccess } = useLastSuccessfulSync();
   const navigate = useNavigate();
 
+  const twrPct = useMemo(() => {
+    if (!allSnapshots || allSnapshots.length < 2) return undefined;
+    return computePortfolioTWRForRange(allSnapshots, chartRange).totalReturnPct;
+  }, [allSnapshots, chartRange]);
+
   // Early return: empty state when no holdings
   if (!holdingsLoading && (!holdings || holdings.length === 0)) {
     return (
