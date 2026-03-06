@@ -14,6 +14,24 @@ import { toast } from "sonner";
 export default function SettingsPage() {
   const { syncNav, isLoading: syncing } = useNavSync();
   const { lastSuccess, latestRun, isLoading: syncLoading } = useLastSuccessfulSync();
+  const [refreshingDirectory, setRefreshingDirectory] = useState(false);
+
+  const handleRefreshDirectory = async () => {
+    setRefreshingDirectory(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-sec-fund-directory");
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`SEC directory refreshed: ${data.totalFunds} funds from ${data.totalAmcs} AMCs`);
+      } else {
+        toast.error(data?.error ?? "Failed to refresh SEC directory");
+      }
+    } catch (err) {
+      toast.error(`Failed: ${(err as Error).message}`);
+    } finally {
+      setRefreshingDirectory(false);
+    }
+  };
 
   const handleSync = async () => {
     const result = await syncNav();
