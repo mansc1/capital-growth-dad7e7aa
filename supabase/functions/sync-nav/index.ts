@@ -101,10 +101,10 @@ Deno.serve(async (req) => {
     if (syncErr) throw new Error(`Failed to create sync_run: ${syncErr.message}`);
     syncRunId = syncRun.id;
 
-    // 2. Load active funds
+    // 2. Load active funds (including sec_fund_code for lookup)
     const { data: funds, error: fundsErr } = await supabase
       .from("funds")
-      .select("id, fund_code")
+      .select("id, fund_code, sec_fund_code")
       .eq("is_active", true);
 
     if (fundsErr) throw new Error(`Failed to load funds: ${fundsErr.message}`);
@@ -120,16 +120,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build fund_code -> fund_id map
-    const codeToId: Record<string, string> = {};
-    for (const f of funds) codeToId[f.fund_code] = f.id;
+    // 3. Build lookup codes from original fund records
+    // Each fund's external lookup code is sec_fund_code (if set), otherwise fund_code
+    const fundLookupCodes = funds.map((f) => ({
+      fund: f,
+      lookupCode: f.sec_fund_code ?? f.fund_code,
+    }));
 
-    // 3. Fetch NAV data
-    const fundCodes = funds.map((f: { fund_code: string }) => f.fund_code);
+    // Collect unique codes for provider call
+    const uniqueLookupCodes = [...new Set(fundLookupCodes.map((flc) => flc.lookupCode))];
 
     let navResults;
     try {
-      navResults = await providerInstance!.fetchLatestNavForFunds(fundCodes);
+      navResults = await providerInstance!.fetchLatestNavForFunds(uniqueLookupCodes);
     } catch (providerErr) {
       const errorMsg = `Provider "${providerName}" failed: ${(providerErr as Error).message}`;
       await supabase
@@ -148,31 +151,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    const fetchedCodes = new Set(navResults.map((r) => r.fundCode));
+    // Index results by fundCode for quick access
+    const resultsByCode = new Map(navResults.map((r) => [r.fundCode, r]));
 
-    // 4. Process each fund
-    for (const fund of funds) {
+    // 4. Process each fund using original fund record for identity
+    for (const { fund, lookupCode } of fundLookupCodes) {
       processedFunds++;
-      const navResult = navResults.find((r) => r.fundCode === fund.fund_code);
+      const navResult = resultsByCode.get(lookupCode);
 
       if (!navResult) {
         skippedFunds++;
-        if (!fetchedCodes.has(fund.fund_code)) {
-          errors.push(`No NAV data returned for ${fund.fund_code}`);
-        }
-        continue;
-      }
-
-      const fundId = codeToId[navResult.fundCode];
-      if (!fundId) {
-        skippedFunds++;
-        errors.push(`No fund_id match for code ${navResult.fundCode}`);
+        errors.push(`No NAV data returned for ${fund.fund_code} (lookup: ${lookupCode})`);
         continue;
       }
 
       if (!navResult.navDate || isNaN(navResult.navPerUnit) || navResult.navPerUnit <= 0) {
         skippedFunds++;
-        errors.push(`Invalid NAV data for ${navResult.fundCode}`);
+        errors.push(`Invalid NAV data for ${fund.fund_code} (lookup: ${lookupCode})`);
         continue;
       }
 
@@ -180,7 +175,7 @@ Deno.serve(async (req) => {
         const { data: existing } = await supabase
           .from("nav_history")
           .select("id, nav_per_unit")
-          .eq("fund_id", fundId)
+          .eq("fund_id", fund.id)
           .eq("nav_date", navResult.navDate)
           .maybeSingle();
 
@@ -200,7 +195,7 @@ Deno.serve(async (req) => {
         } else {
           const { error: insertErr } = await supabase
             .from("nav_history")
-            .insert({ fund_id: fundId, nav_date: navResult.navDate, nav_per_unit: navResult.navPerUnit, source: navResult.source, fetched_at: now });
+            .insert({ fund_id: fund.id, nav_date: navResult.navDate, nav_per_unit: navResult.navPerUnit, source: navResult.source, fetched_at: now });
           if (insertErr) throw insertErr;
           insertedRows++;
         }
