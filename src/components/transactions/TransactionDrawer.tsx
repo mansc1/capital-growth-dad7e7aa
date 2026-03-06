@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
-import { useFunds } from "@/hooks/use-funds";
+import { useActiveFunds } from "@/hooks/use-funds";
 import { useNavLookup } from "@/hooks/use-nav-history";
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
 import { useHoldings } from "@/hooks/use-holdings";
