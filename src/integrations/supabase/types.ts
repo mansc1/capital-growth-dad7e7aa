@@ -127,6 +127,51 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          inserted_count: number
+          job_name: string
+          processed_count: number
+          skipped_count: number
+          started_at: string
+          status: string
+          trigger_type: string
+          updated_count: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          inserted_count?: number
+          job_name?: string
+          processed_count?: number
+          skipped_count?: number
+          started_at?: string
+          status?: string
+          trigger_type?: string
+          updated_count?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          inserted_count?: number
+          job_name?: string
+          processed_count?: number
+          skipped_count?: number
+          started_at?: string
+          status?: string
+          trigger_type?: string
+          updated_count?: number
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           amount: number
