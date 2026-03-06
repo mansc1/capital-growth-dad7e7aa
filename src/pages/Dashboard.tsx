@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePortfolioSnapshots } from "@/hooks/use-portfolio-snapshots";
 import { useHoldings } from "@/hooks/use-holdings";
 import { useAllNavHistory } from "@/hooks/use-all-nav-history";
@@ -10,7 +11,10 @@ import { FundPerformanceChart } from "@/components/dashboard/FundPerformanceChar
 import { StatCards } from "@/components/dashboard/StatCards";
 import { AllocationChart } from "@/components/dashboard/AllocationChart";
 import { HoldingsSummaryTable } from "@/components/dashboard/HoldingsSummaryTable";
+import { Button } from "@/components/ui/button";
 import { computePortfolioTWRForRange } from "@/analytics/returns";
+import { Briefcase, Plus } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ChartRange } from "@/types/portfolio";
 
 export default function Dashboard() {
@@ -20,6 +24,51 @@ export default function Dashboard() {
   const { data: holdings, isLoading: holdingsLoading } = useHoldings();
   const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange);
   const { lastSuccess } = useLastSuccessfulSync();
+  const navigate = useNavigate();
+
+  const twrPct = useMemo(() => {
+    if (!allSnapshots || allSnapshots.length < 2) return undefined;
+    return computePortfolioTWRForRange(allSnapshots, chartRange).totalReturnPct;
+  }, [allSnapshots, chartRange]);
+
+  // Early return: empty state when no holdings
+  if (!holdingsLoading && (!holdings || holdings.length === 0)) {
+    return (
+      <AppLayout>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-1">Your portfolio at a glance</p>
+          </div>
+          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+            <Briefcase className="h-16 w-16 mb-6 opacity-20" />
+            <h2 className="text-lg font-medium text-foreground">No portfolio data yet</h2>
+            <p className="text-sm mt-2 max-w-sm text-center">
+              Start by adding your first transaction and selecting a fund from the SEC directory.
+            </p>
+            <Button className="mt-6" onClick={() => navigate("/transactions?add=1")}>
+              <Plus className="h-4 w-4 mr-1" /> Add Transaction
+            </Button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Loading state
+  if (holdingsLoading) {
+    return (
+      <AppLayout>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-1">Your portfolio at a glance</p>
+          </div>
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   const latestSnapshot = snapshots?.[snapshots.length - 1];
   const totalCost = holdings?.reduce((s, h) => s + h.total_cost, 0) ?? 0;
@@ -27,12 +76,7 @@ export default function Dashboard() {
   const totalGainLoss = totalValue - totalCost;
   const totalReturnPct = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
 
-  const twrPct = useMemo(() => {
-    if (!allSnapshots || allSnapshots.length < 2) return undefined;
-    return computePortfolioTWRForRange(allSnapshots, chartRange).totalReturnPct;
-  }, [allSnapshots, chartRange]);
 
-  // Primary: portfolio_snapshots.latest_nav_date
   const latestNavDate = latestSnapshot?.latest_nav_date ?? null;
   const lastSyncTime = lastSuccess?.completed_at
     ? new Date(lastSuccess.completed_at).toLocaleString()

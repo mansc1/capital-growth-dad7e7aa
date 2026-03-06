@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useTransactions, useDeleteTransaction } from "@/hooks/use-transactions";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatNumber, formatDate } from "@/lib/format";
 import { Plus, Pencil, Trash2, ArrowLeftRight } from "lucide-react";
@@ -26,6 +26,17 @@ export default function Transactions() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editTx, setEditTx] = useState<TransactionWithFund | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // Auto-open drawer from ?add=1
+  useEffect(() => {
+    if (searchParams.get("add") === "1") {
+      setEditTx(null);
+      setDrawerOpen(true);
+      navigate("/transactions", { replace: true });
+    }
+  }, []);
 
   return (
     <AppLayout>
@@ -107,7 +118,12 @@ export default function Transactions() {
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <ArrowLeftRight className="h-12 w-12 mb-4 opacity-30" />
                 <p className="text-sm font-medium">No transactions yet</p>
-                <p className="text-xs mt-1">Click "Add Transaction" to record your first trade</p>
+                <p className="text-xs mt-1 mb-4">
+                  Record your first buy, sell, or dividend transaction to start tracking your portfolio.
+                </p>
+                <Button size="sm" onClick={() => { setEditTx(null); setDrawerOpen(true); }}>
+                  <Plus className="h-4 w-4 mr-1" /> Add Transaction
+                </Button>
               </div>
             )}
           </CardContent>
