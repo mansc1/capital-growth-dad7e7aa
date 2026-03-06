@@ -76,10 +76,6 @@ export default function Dashboard() {
   const totalGainLoss = totalValue - totalCost;
   const totalReturnPct = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
 
-  const twrPct = useMemo(() => {
-    if (!allSnapshots || allSnapshots.length < 2) return undefined;
-    return computePortfolioTWRForRange(allSnapshots, chartRange).totalReturnPct;
-  }, [allSnapshots, chartRange]);
 
   const latestNavDate = latestSnapshot?.latest_nav_date ?? null;
   const lastSyncTime = lastSuccess?.completed_at
