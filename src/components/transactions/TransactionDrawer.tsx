@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,11 +12,11 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
-import { useFunds } from "@/hooks/use-funds";
+import { useActiveFunds } from "@/hooks/use-active-funds";
+import { useEnsureFund } from "@/hooks/use-ensure-fund";
 import { useNavLookup } from "@/hooks/use-nav-history";
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
-import { useHoldings } from "@/hooks/use-holdings";
-import { getCurrentUnits } from "@/lib/holdings";
+import { SecFundSearchPopover } from "@/components/funds/SecFundSearchPopover";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransactionWithFund, TxType, DividendType } from "@/types/portfolio";
 
@@ -49,10 +49,12 @@ interface Props {
 }
 
 export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
-  const { data: funds } = useFunds();
+  const { data: funds } = useActiveFunds();
+  const { mutateAsync: ensureFund, isPending: isEnsuring } = useEnsureFund();
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
   const [navNotFound, setNavNotFound] = useState(false);
+  const [newFundLabel, setNewFundLabel] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(baseSchema),
@@ -79,6 +81,13 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
   const isBuyType = watchTxType === "buy" || watchTxType === "switch_in";
   const isSellType = watchTxType === "sell" || watchTxType === "switch_out";
   const isDividend = watchTxType === "dividend";
+
+  // Clear newFundLabel when the fund appears in the dropdown
+  useEffect(() => {
+    if (newFundLabel && funds?.find((f) => f.id === watchFundId)) {
+      setNewFundLabel(null);
+    }
+  }, [funds, watchFundId, newFundLabel]);
 
   // NAV auto-fill
   const { data: navLookup } = useNavLookup(watchFundId, watchDate);
@@ -124,6 +133,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         note: editTransaction.note ?? "",
         dividend_type: editTransaction.dividend_type,
       });
+      setNewFundLabel(null);
     } else {
       form.reset({
         fund_id: "",
@@ -136,6 +146,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         note: "",
         dividend_type: null,
       });
+      setNewFundLabel(null);
     }
   }, [editTransaction, open]);
 
@@ -150,17 +161,12 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         .order("trade_date")
         .then(({ data }) => {
           if (data) {
-            const txs = data.map((t) => ({
-              ...t,
-              units: Number(t.units),
-              tx_type: t.tx_type as string,
-              dividend_type: t.dividend_type as string | null,
-            }));
             let total = 0;
-            for (const tx of txs) {
-              if (tx.tx_type === "buy" || tx.tx_type === "switch_in") total += tx.units;
-              else if (tx.tx_type === "sell" || tx.tx_type === "switch_out") total -= tx.units;
-              else if (tx.tx_type === "dividend" && tx.dividend_type === "reinvest") total += tx.units;
+            for (const tx of data) {
+              const u = Number(tx.units);
+              if (tx.tx_type === "buy" || tx.tx_type === "switch_in") total += u;
+              else if (tx.tx_type === "sell" || tx.tx_type === "switch_out") total -= u;
+              else if (tx.tx_type === "dividend" && tx.dividend_type === "reinvest") total += u;
             }
             setCurrentUnits(Math.max(0, total));
           }
@@ -168,8 +174,13 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
   }, [isSellType, watchFundId]);
 
+  async function handleSecFundSelect(result: import("@/hooks/use-sec-fund-search").SecFundResult) {
+    const fundId = await ensureFund(result);
+    form.setValue("fund_id", fundId);
+    setNewFundLabel(result.proj_abbr_name);
+  }
+
   async function onSubmit(values: FormValues) {
-    // Validate sell doesn't exceed holdings
     if (isSellType && values.units > currentUnits) {
       form.setError("units", { message: `Cannot sell more than ${currentUnits.toFixed(4)} units held` });
       return;
@@ -194,6 +205,14 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
     onClose();
   }
+
+  // Determine the display value for the fund selector
+  const selectedFundInList = funds?.find((f) => f.id === watchFundId);
+  const fundDisplayValue = selectedFundInList
+    ? watchFundId
+    : newFundLabel
+      ? watchFundId
+      : "";
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -234,12 +253,23 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
               name="fund_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Fund</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Fund</FormLabel>
+                    <SecFundSearchPopover onSelect={handleSecFundSelect} />
+                  </div>
+                  <Select value={fundDisplayValue} onValueChange={(v) => { field.onChange(v); setNewFundLabel(null); }}>
                     <FormControl>
-                      <SelectTrigger><SelectValue placeholder="Select fund" /></SelectTrigger>
+                      <SelectTrigger disabled={isEnsuring}>
+                        <SelectValue placeholder={isEnsuring ? "Adding fund…" : "Select fund"} />
+                      </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      {/* Show newly added fund if not yet in the list */}
+                      {newFundLabel && !selectedFundInList && watchFundId && (
+                        <SelectItem value={watchFundId}>
+                          {newFundLabel} (just added)
+                        </SelectItem>
+                      )}
                       {funds?.map((f) => (
                         <SelectItem key={f.id} value={f.id}>{f.fund_code} — {f.fund_name}</SelectItem>
                       ))}
@@ -401,7 +431,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
               <Button
                 type="submit"
                 className="flex-1"
-                disabled={createMutation.isPending || updateMutation.isPending}
+                disabled={createMutation.isPending || updateMutation.isPending || isEnsuring}
               >
                 {editTransaction ? "Update" : "Add"}
               </Button>

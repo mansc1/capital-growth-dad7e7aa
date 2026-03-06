@@ -1,4 +1,4 @@
-import { LayoutDashboard, Briefcase, ArrowLeftRight, FolderCog, Settings } from "lucide-react";
+import { LayoutDashboard, Briefcase, ArrowLeftRight, Settings } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -18,7 +18,6 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Holdings", url: "/holdings", icon: Briefcase },
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
-  { title: "Manage Funds", url: "/funds/manage", icon: FolderCog },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
@@ -61,8 +60,6 @@ export function AppSidebar() {
                     isActive={
                       item.url === "/"
                         ? location.pathname === "/"
-                        : item.url === "/funds/manage"
-                        ? location.pathname === "/funds/manage"
                         : location.pathname.startsWith(item.url)
                     }
                     tooltip={item.title}

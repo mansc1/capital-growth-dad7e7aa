@@ -1,12 +1,13 @@
 import { useHoldings } from "@/hooks/use-holdings";
 import { AppLayout } from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatCurrency, formatPercent, formatNumber, gainLossColor } from "@/lib/format";
 import { useNavigate } from "react-router-dom";
-import { Briefcase } from "lucide-react";
+import { Briefcase, Plus } from "lucide-react";
 
 export default function Holdings() {
   const { data: holdings, isLoading } = useHoldings();
@@ -84,7 +85,12 @@ export default function Holdings() {
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Briefcase className="h-12 w-12 mb-4 opacity-30" />
                 <p className="text-sm font-medium">No holdings yet</p>
-                <p className="text-xs mt-1">Add a transaction to get started</p>
+                <p className="text-xs mt-1 mb-4">
+                  Once you add your first transaction, your holdings will appear here.
+                </p>
+                <Button size="sm" onClick={() => navigate("/transactions?add=1")}>
+                  <Plus className="h-4 w-4 mr-1" /> Add Transaction
+                </Button>
               </div>
             )}
           </CardContent>
