@@ -6,6 +6,6 @@ export interface NavResult {
 }
 
 export interface NavProvider {
-  fetchLatestNavForFund(fundCode: string): Promise<NavResult | null>;
-  fetchLatestNavForFunds(fundCodes: string[]): Promise<NavResult[]>;
+  fetchLatestNavForFund(fundCode: string, projId?: string): Promise<NavResult | null>;
+  fetchLatestNavForFunds(fundCodes: string[], projIdMap?: Map<string, string>): Promise<NavResult[]>;
 }

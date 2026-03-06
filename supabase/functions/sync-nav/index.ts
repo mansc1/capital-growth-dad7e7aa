@@ -8,6 +8,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const NORM = (s: string): string => s.trim().toUpperCase();
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -44,12 +46,9 @@ Deno.serve(async (req) => {
     providerInstance = result.provider;
     providerName = result.providerName;
   } catch (providerErr) {
-    // Provider construction failed (e.g. missing SEC_API_KEY)
     const errorMsg = (providerErr as Error).message;
-    // Try to determine provider name from env even on failure
     providerName = Deno.env.get("NAV_PROVIDER") ?? "unknown";
 
-    // Still create a sync_runs row so the failure is visible
     try {
       await supabase.from("sync_runs").insert({
         job_name: "nav_sync",
@@ -63,15 +62,9 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        success: false,
-        processedFunds: 0,
-        insertedRows: 0,
-        updatedRows: 0,
-        skippedFunds: 0,
-        latestNavDate: null,
-        syncRunId: null,
-        provider: providerName,
-        errors: [errorMsg],
+        success: false, processedFunds: 0, insertedRows: 0, updatedRows: 0,
+        skippedFunds: 0, latestNavDate: null, syncRunId: null,
+        provider: providerName, errors: [errorMsg],
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
@@ -121,41 +114,87 @@ Deno.serve(async (req) => {
     }
 
     // 3. Build lookup codes from original fund records
-    // Each fund's external lookup code is sec_fund_code (if set), otherwise fund_code
     const fundLookupCodes = funds.map((f) => ({
       fund: f,
       lookupCode: f.sec_fund_code ?? f.fund_code,
     }));
 
-    // Collect unique codes for provider call
-    const uniqueLookupCodes = [...new Set(fundLookupCodes.map((flc) => flc.lookupCode))];
+    // 4. Build projIdMap from sec_fund_directory (for SEC provider)
+    let projIdMap: Map<string, string> | undefined;
+    const isSec = providerName === "sec";
 
+    if (isSec) {
+      const { data: dirEntries, error: dirErr } = await supabase
+        .from("sec_fund_directory")
+        .select("proj_id, proj_abbr_name");
+
+      if (dirErr) throw new Error(`Failed to query sec_fund_directory: ${dirErr.message}`);
+
+      projIdMap = new Map<string, string>();
+      if (dirEntries) {
+        for (const entry of dirEntries) {
+          if (entry.proj_abbr_name && entry.proj_id) {
+            projIdMap.set(NORM(entry.proj_abbr_name), entry.proj_id);
+          }
+        }
+      }
+
+      console.log(`[sync-nav] Built projIdMap with ${projIdMap.size} entries from sec_fund_directory`);
+    }
+
+    // 5. Pre-check resolution for SEC provider — skip unresolvable funds
+    const resolvedFundLookups: typeof fundLookupCodes = [];
+
+    for (const flc of fundLookupCodes) {
+      if (isSec && projIdMap) {
+        if (!projIdMap.has(NORM(flc.lookupCode))) {
+          processedFunds++;
+          skippedFunds++;
+          if (projIdMap.size === 0) {
+            errors.push("SEC fund directory is empty — sync the directory first via Settings");
+          } else {
+            errors.push(`Fund ${flc.fund.fund_code}: no matching entry in SEC fund directory for '${flc.lookupCode}' (try refreshing the directory)`);
+          }
+          continue;
+        }
+      }
+      resolvedFundLookups.push(flc);
+    }
+
+    // Collect unique resolved codes for provider call
+    const resolvedLookupCodes = [...new Set(resolvedFundLookups.map((flc) => flc.lookupCode))];
+
+    // 6. Call provider with only resolved codes
     let navResults;
-    try {
-      navResults = await providerInstance!.fetchLatestNavForFunds(uniqueLookupCodes);
-    } catch (providerErr) {
-      const errorMsg = `Provider "${providerName}" failed: ${(providerErr as Error).message}`;
-      await supabase
-        .from("sync_runs")
-        .update({
-          status: "failed",
-          completed_at: new Date().toISOString(),
-          error_message: errorMsg,
-          provider: providerName,
-        })
-        .eq("id", syncRunId);
+    if (resolvedLookupCodes.length > 0) {
+      try {
+        navResults = await providerInstance!.fetchLatestNavForFunds(resolvedLookupCodes, projIdMap);
+      } catch (providerErr) {
+        const errorMsg = `Provider "${providerName}" failed: ${(providerErr as Error).message}`;
+        await supabase
+          .from("sync_runs")
+          .update({
+            status: "failed",
+            completed_at: new Date().toISOString(),
+            error_message: errorMsg,
+            provider: providerName,
+          })
+          .eq("id", syncRunId);
 
-      return new Response(
-        JSON.stringify({ success: false, processedFunds: 0, insertedRows: 0, updatedRows: 0, skippedFunds: 0, latestNavDate: null, syncRunId, provider: providerName, errors: [errorMsg] }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+        return new Response(
+          JSON.stringify({ success: false, processedFunds, insertedRows, updatedRows, skippedFunds, latestNavDate, syncRunId, provider: providerName, errors: [errorMsg, ...errors] }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    } else {
+      navResults = [];
     }
 
     // Index results by fundCode for quick access
     const resultsByCode = new Map(navResults.map((r) => [r.fundCode, r]));
 
-    // 4. Process each fund using original fund record for identity
-    for (const { fund, lookupCode } of fundLookupCodes) {
+    // 7. Process only resolved funds
+    for (const { fund, lookupCode } of resolvedFundLookups) {
       processedFunds++;
       const navResult = resultsByCode.get(lookupCode);
 
@@ -208,7 +247,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 5. Rebuild portfolio snapshot
+    // 8. Rebuild portfolio snapshot
     try {
       const snapshotResult = await rebuildPortfolioSnapshotsForToday(supabase);
       if (snapshotResult.latestNavDate && (!latestNavDate || snapshotResult.latestNavDate > latestNavDate)) {
@@ -218,7 +257,7 @@ Deno.serve(async (req) => {
       errors.push(`Snapshot rebuild failed: ${(err as Error).message}`);
     }
 
-    // 6. Update sync_runs
+    // 9. Update sync_runs
     const finalStatus = errors.length > 0 ? "failed" : "success";
     await supabase
       .from("sync_runs")

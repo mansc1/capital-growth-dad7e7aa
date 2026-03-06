@@ -19,7 +19,7 @@ function getTodayDateString(): string {
 }
 
 export class MockNavProvider implements NavProvider {
-  async fetchLatestNavForFund(fundCode: string): Promise<NavResult | null> {
+  async fetchLatestNavForFund(fundCode: string, _projId?: string): Promise<NavResult | null> {
     const today = getTodayDateString();
     const seed = hashCode(fundCode + today);
     const baseNav = 10 + (seed % 40);
@@ -34,7 +34,7 @@ export class MockNavProvider implements NavProvider {
     };
   }
 
-  async fetchLatestNavForFunds(fundCodes: string[]): Promise<NavResult[]> {
+  async fetchLatestNavForFunds(fundCodes: string[], _projIdMap?: Map<string, string>): Promise<NavResult[]> {
     const results: NavResult[] = [];
     for (const code of fundCodes) {
       const result = await this.fetchLatestNavForFund(code);
