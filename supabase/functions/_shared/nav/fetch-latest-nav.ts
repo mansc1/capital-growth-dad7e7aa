@@ -2,14 +2,14 @@ import type { NavProvider } from "./types.ts";
 import { MockNavProvider } from "./providers/mock.ts";
 import { SecThNavProvider } from "./providers/sec.ts";
 
-export function getNavProvider(): NavProvider {
-  const provider = Deno.env.get("NAV_PROVIDER") ?? "mock";
+export function getNavProvider(): { provider: NavProvider; providerName: string } {
+  const providerName = Deno.env.get("NAV_PROVIDER") ?? "mock";
 
-  switch (provider) {
+  switch (providerName) {
     case "sec":
-      return new SecThNavProvider();
+      return { provider: new SecThNavProvider(), providerName: "sec" };
     case "mock":
     default:
-      return new MockNavProvider();
+      return { provider: new MockNavProvider(), providerName: "mock" };
   }
 }

@@ -136,6 +136,7 @@ export type Database = {
           inserted_count: number
           job_name: string
           processed_count: number
+          provider: string
           skipped_count: number
           started_at: string
           status: string
@@ -150,6 +151,7 @@ export type Database = {
           inserted_count?: number
           job_name?: string
           processed_count?: number
+          provider?: string
           skipped_count?: number
           started_at?: string
           status?: string
@@ -164,6 +166,7 @@ export type Database = {
           inserted_count?: number
           job_name?: string
           processed_count?: number
+          provider?: string
           skipped_count?: number
           started_at?: string
           status?: string

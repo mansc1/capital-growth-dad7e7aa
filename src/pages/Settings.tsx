@@ -75,7 +75,12 @@ export default function SettingsPage() {
               <div>
                 <p className="text-muted-foreground text-xs mb-1">Provider</p>
                 <p className="font-medium">
-                  {lastSuccess ? (lastSuccess.error_message ? "Mock" : "Mock") : "Mock"}
+                  {(() => {
+                    const p = latestRun?.provider;
+                    if (p === "sec") return "SEC Thailand";
+                    if (p === "mock") return "Mock";
+                    return p ?? "Unknown";
+                  })()}
                 </p>
               </div>
               <div>
