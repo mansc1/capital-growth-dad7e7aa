@@ -5,18 +5,38 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, CheckCircle2, XCircle, Clock, Database } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Database, AlertTriangle } from "lucide-react";
 import { useNavSync } from "@/hooks/use-nav-sync";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
 import { useActiveFunds } from "@/hooks/use-funds";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+
+const SHOW_DEV_TOOLS = import.meta.env.VITE_ENABLE_DEV_TOOLS === "true";
 
 export default function SettingsPage() {
   const { syncNav, isLoading: syncing } = useNavSync();
   const { lastSuccess, latestRun, isLoading: syncLoading } = useLastSuccessfulSync();
   const { data: activeFunds, isLoading: fundsLoading } = useActiveFunds();
   const [refreshingDirectory, setRefreshingDirectory] = useState(false);
+
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const hasActiveFunds = !fundsLoading && activeFunds && activeFunds.length > 0;
 
@@ -47,6 +67,51 @@ export default function SettingsPage() {
       toast.error(`Sync finished with errors: ${result.errors.join(", ")}`);
     } else {
       toast.error("NAV sync failed. Check your connection and try again.");
+    }
+  };
+
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      const tables = ["portfolio_snapshots", "sync_runs", "transactions", "nav_history"] as const;
+
+      for (const table of tables) {
+        const { error } = await supabase.from(table).delete().neq("id", "");
+        if (error) {
+          toast.error(`Failed to clear ${table}: ${error.message}`);
+          return;
+        }
+      }
+
+      const { error: archiveError } = await supabase
+        .from("funds")
+        .update({ is_active: false })
+        .eq("is_active", true);
+
+      if (archiveError) {
+        toast.error(`Failed to archive funds: ${archiveError.message}`);
+        return;
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["funds"] }),
+        queryClient.invalidateQueries({ queryKey: ["holdings"] }),
+        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+        queryClient.invalidateQueries({ queryKey: ["nav_history"] }),
+        queryClient.invalidateQueries({ queryKey: ["all_nav_history"] }),
+        queryClient.invalidateQueries({ queryKey: ["portfolio_snapshots"] }),
+        queryClient.invalidateQueries({ queryKey: ["sync_runs"] }),
+        queryClient.invalidateQueries({ queryKey: ["latest_navs"] }),
+      ]);
+
+      toast.success("Portfolio data reset successfully");
+      setResetDialogOpen(false);
+      setResetConfirmText("");
+      navigate("/dashboard");
+    } catch (err) {
+      toast.error(`Reset failed: ${(err as Error).message}`);
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -169,6 +234,64 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+
+        {SHOW_DEV_TOOLS && (
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                Advanced
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                This section contains destructive actions intended for development and testing.
+              </p>
+              <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setResetDialogOpen(true)}
+                >
+                  Reset Portfolio Data
+                </Button>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset all portfolio data?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete all transactions, NAV history, portfolio snapshots, and sync history. All funds will be archived. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="space-y-2 py-2">
+                    <Label htmlFor="reset-confirm" className="text-sm">
+                      Type <span className="font-mono font-bold">RESET</span> to confirm
+                    </Label>
+                    <Input
+                      id="reset-confirm"
+                      value={resetConfirmText}
+                      onChange={(e) => setResetConfirmText(e.target.value)}
+                      placeholder="RESET"
+                      className="max-w-xs"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setResetConfirmText("")}>
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleReset}
+                      disabled={resetConfirmText !== "RESET" || resetting}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {resetting ? "Resetting…" : "Confirm Reset"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppLayout>
   );
