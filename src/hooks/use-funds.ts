@@ -16,21 +16,6 @@ export function useFunds() {
   });
 }
 
-export function useActiveFunds() {
-  return useQuery({
-    queryKey: ['funds', 'active'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('funds')
-        .select('*')
-        .eq('is_active', true)
-        .order('fund_code');
-      if (error) throw error;
-      return data as Fund[];
-    },
-  });
-}
-
 export function useFund(id: string | undefined) {
   return useQuery({
     queryKey: ['funds', id],

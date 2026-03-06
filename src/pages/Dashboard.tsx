@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { usePortfolioSnapshots } from "@/hooks/use-portfolio-snapshots";
 import { useHoldings } from "@/hooks/use-holdings";
 import { useAllNavHistory } from "@/hooks/use-all-nav-history";
@@ -12,12 +11,9 @@ import { StatCards } from "@/components/dashboard/StatCards";
 import { AllocationChart } from "@/components/dashboard/AllocationChart";
 import { HoldingsSummaryTable } from "@/components/dashboard/HoldingsSummaryTable";
 import { computePortfolioTWRForRange } from "@/analytics/returns";
-import { Button } from "@/components/ui/button";
-import { Plus, ArrowLeftRight, BarChart3 } from "lucide-react";
 import type { ChartRange } from "@/types/portfolio";
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const [chartRange, setChartRange] = useState<ChartRange>("ALL");
   const { data: snapshots, isLoading: snapshotsLoading } = usePortfolioSnapshots(chartRange);
   const { data: allSnapshots } = usePortfolioSnapshots("ALL");
@@ -36,45 +32,13 @@ export default function Dashboard() {
     return computePortfolioTWRForRange(allSnapshots, chartRange).totalReturnPct;
   }, [allSnapshots, chartRange]);
 
+  // Primary: portfolio_snapshots.latest_nav_date
   const latestNavDate = latestSnapshot?.latest_nav_date ?? null;
   const lastSyncTime = lastSuccess?.completed_at
     ? new Date(lastSuccess.completed_at).toLocaleString()
     : latestSnapshot
       ? new Date(latestSnapshot.created_at).toLocaleString()
       : null;
-
-  const hasHoldings = !holdingsLoading && holdings && holdings.length > 0;
-  const isLoading = holdingsLoading || snapshotsLoading;
-
-  if (!isLoading && !hasHoldings) {
-    return (
-      <AppLayout>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Your portfolio at a glance
-            </p>
-          </div>
-          <div className="border border-border rounded-lg p-16 text-center space-y-4">
-            <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground/40" />
-            <h3 className="text-lg font-medium text-foreground">No portfolio data yet</h3>
-            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              Start by adding your first fund and recording your first transaction.
-            </p>
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <Button onClick={() => navigate("/funds/manage")}>
-                <Plus className="h-4 w-4 mr-1" /> Add Fund
-              </Button>
-              <Button variant="outline" onClick={() => navigate("/transactions")}>
-                <ArrowLeftRight className="h-4 w-4 mr-1" /> Add Transaction
-              </Button>
-            </div>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
 
   return (
     <AppLayout>

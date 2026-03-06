@@ -8,10 +8,8 @@ export function useHoldings(includeZero = false) {
     queryKey: ['holdings', includeZero],
     queryFn: async () => {
       // Fetch funds, transactions, and latest NAVs in parallel
-      const fundsQuery = supabase.from('funds').select('*').order('fund_code');
-      if (!includeZero) fundsQuery.eq('is_active', true);
       const [fundsRes, txRes, navRes] = await Promise.all([
-        fundsQuery,
+        supabase.from('funds').select('*').order('fund_code'),
         supabase.from('transactions').select('*').order('trade_date'),
         supabase.from('nav_history').select('fund_id, nav_per_unit, nav_date').order('fund_id').order('nav_date', { ascending: false }),
       ]);
