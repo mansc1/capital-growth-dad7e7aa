@@ -7,9 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatNumber, formatDate } from "@/lib/format";
-import { Plus, Pencil, Trash2, ArrowLeftRight } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowLeftRight, Upload } from "lucide-react";
 import { TransactionDrawer } from "@/components/transactions/TransactionDrawer";
 import { DeleteConfirmDialog } from "@/components/transactions/DeleteConfirmDialog";
+import { ImportCsvDialog } from "@/components/transactions/ImportCsvDialog";
 import type { TransactionWithFund } from "@/types/portfolio";
 
 const txBadgeVariant: Record<string, string> = {
@@ -26,6 +27,7 @@ export default function Transactions() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editTx, setEditTx] = useState<TransactionWithFund | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -48,9 +50,14 @@ export default function Transactions() {
               All buy, sell, and dividend transactions
             </p>
           </div>
-          <Button onClick={() => { setEditTx(null); setDrawerOpen(true); }} size="sm">
-            <Plus className="h-4 w-4 mr-1" /> Add Transaction
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-1" /> Import CSV
+            </Button>
+            <Button onClick={() => { setEditTx(null); setDrawerOpen(true); }} size="sm">
+              <Plus className="h-4 w-4 mr-1" /> Add Transaction
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -146,6 +153,7 @@ export default function Transactions() {
           }
         }}
       />
+      <ImportCsvDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </AppLayout>
   );
 }
