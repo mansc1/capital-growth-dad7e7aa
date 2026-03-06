@@ -73,17 +73,12 @@ export default function SettingsPage() {
   const handleReset = async () => {
     setResetting(true);
     try {
-      const steps: { table: string; fn: () => Promise<{ error: any }> }[] = [
-        { table: "portfolio_snapshots", fn: () => supabase.from("portfolio_snapshots").delete().neq("id", "").select() },
-        { table: "sync_runs", fn: () => supabase.from("sync_runs").delete().neq("id", "").select() },
-        { table: "transactions", fn: () => supabase.from("transactions").delete().neq("id", "").select() },
-        { table: "nav_history", fn: () => supabase.from("nav_history").delete().neq("id", "").select() },
-      ];
+      const tables = ["portfolio_snapshots", "sync_runs", "transactions", "nav_history"] as const;
 
-      for (const step of steps) {
-        const { error } = await step.fn();
+      for (const table of tables) {
+        const { error } = await supabase.from(table).delete().neq("id", "");
         if (error) {
-          toast.error(`Failed to clear ${step.table}: ${error.message}`);
+          toast.error(`Failed to clear ${table}: ${error.message}`);
           return;
         }
       }
