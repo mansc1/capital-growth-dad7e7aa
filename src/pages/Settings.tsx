@@ -24,7 +24,7 @@ import {
 import { useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
-const SHOW_DEV_TOOLS = import.meta.env.VITE_ENABLE_DEV_TOOLS === "true";
+
 
 export default function SettingsPage() {
   const { syncNav, isLoading: syncing } = useNavSync();
