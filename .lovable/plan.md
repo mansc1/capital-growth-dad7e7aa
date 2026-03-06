@@ -1,33 +1,31 @@
 
 
-# Improve Dashboard Metric Labels & UX
+# Update Cron Job Secret Header
 
-## Single file change: `src/components/dashboard/StatCards.tsx`
+## What
+Update the existing `daily-nav-sync` pg_cron job to use the correct `x-cron-secret` header value matching the environment secret.
 
-### Rename labels & reorder
-- "Gain / Loss" → **"Unrealized Gain"**
-- "Return" → **"Investor Return (MWR)"**
-- "Total Return (TWR)" → **"Portfolio Return (TWR)"**
-- Order: Total Value → Total Cost → Unrealized Gain → Investor Return (MWR) → Portfolio Return (TWR)
+## How
+Run via Supabase insert tool (not migration, since it contains project-specific data):
 
-### Add helper text (two return cards only)
-- MWR: "Your personal return based on money invested."
-- TWR: "Performance independent of deposits or withdrawals."
-- Rendered as `text-[10px] text-muted-foreground mt-1`
+1. Unschedule the existing job
+2. Re-create it with the correct secret value `navsync_9f7c21c4a6e94b3b8d9a2e5c6f7d1b0` in the `x-cron-secret` header
 
-### Add info icon tooltips (two return cards only)
-- Import `Info` from lucide-react, `Tooltip` components from `@/components/ui/tooltip`
-- 12px `Info` icon beside label, `cursor-help`
-- MWR tooltip: "Return on your invested capital based on how much you put in."
-- TWR tooltip: "Portfolio performance excluding the impact of cash flows."
+```sql
+SELECT cron.unschedule('daily-nav-sync');
 
-### Prevent label wrapping
-- Add `whitespace-nowrap` to label `<p>` element
-- Add `shrink-0` to icon elements
+SELECT cron.schedule(
+  'daily-nav-sync',
+  '0 13 * * *',
+  $$
+  SELECT net.http_post(
+    url:='https://wasgiapsgiagwwiwnfcl.supabase.co/functions/v1/sync-nav',
+    headers:='{"Content-Type": "application/json", "x-cron-secret": "navsync_9f7c21c4a6e94b3b8d9a2e5c6f7d1b0"}'::jsonb,
+    body:='{"trigger_type":"cron"}'::jsonb
+  ) AS request_id;
+  $$
+);
+```
 
-### Implementation
-- Extend stats array items with optional `helperText?: string` and `tooltip?: string` fields
-- Wrap card grid in `<TooltipProvider>`
-- Conditionally render helper text and tooltip based on field presence
-- No changes to props, calculations, or other files
+No file changes needed.
 
