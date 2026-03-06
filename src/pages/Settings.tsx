@@ -36,7 +36,12 @@ export default function SettingsPage() {
   const [resetConfirmText, setResetConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+
+  const SHOW_DEV_TOOLS =
+    import.meta.env.VITE_ENABLE_DEV_TOOLS === "true" ||
+    new URLSearchParams(location.search).has("devtools");
 
   const hasActiveFunds = !fundsLoading && activeFunds && activeFunds.length > 0;
 
