@@ -1,17 +1,37 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Database } from "lucide-react";
 import { useNavSync } from "@/hooks/use-nav-sync";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
   const { syncNav, isLoading: syncing } = useNavSync();
   const { lastSuccess, latestRun, isLoading: syncLoading } = useLastSuccessfulSync();
+  const [refreshingDirectory, setRefreshingDirectory] = useState(false);
+
+  const handleRefreshDirectory = async () => {
+    setRefreshingDirectory(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-sec-fund-directory");
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`SEC directory refreshed: ${data.totalFunds} funds from ${data.totalAmcs} AMCs`);
+      } else {
+        toast.error(data?.error ?? "Failed to refresh SEC directory");
+      }
+    } catch (err) {
+      toast.error(`Failed: ${(err as Error).message}`);
+    } finally {
+      setRefreshingDirectory(false);
+    }
+  };
 
   const handleSync = async () => {
     const result = await syncNav();
@@ -120,6 +140,21 @@ export default function SettingsPage() {
             <Button onClick={handleSync} disabled={syncing} size="sm" className="mt-2">
               <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
               {syncing ? "Syncing…" : "Sync NAV Now"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">SEC Fund Directory</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Refresh the cached SEC Thailand fund directory. This crawls all AMCs from the SEC API and stores the fund list locally for fast search when assigning SEC fund codes.
+            </p>
+            <Button onClick={handleRefreshDirectory} disabled={refreshingDirectory} size="sm">
+              <Database className={`h-4 w-4 mr-2 ${refreshingDirectory ? "animate-pulse" : ""}`} />
+              {refreshingDirectory ? "Refreshing…" : "Refresh SEC Directory"}
             </Button>
           </CardContent>
         </Card>
