@@ -130,6 +130,33 @@ export type Database = {
         }
         Relationships: []
       }
+      sec_fund_directory: {
+        Row: {
+          amc_name: string | null
+          proj_abbr_name: string
+          proj_id: string
+          proj_name_en: string | null
+          proj_name_th: string | null
+          updated_at: string
+        }
+        Insert: {
+          amc_name?: string | null
+          proj_abbr_name: string
+          proj_id: string
+          proj_name_en?: string | null
+          proj_name_th?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amc_name?: string | null
+          proj_abbr_name?: string
+          proj_id?: string
+          proj_name_en?: string | null
+          proj_name_th?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sync_runs: {
         Row: {
           completed_at: string | null
@@ -236,7 +263,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       dividend_type: "cash" | "reinvest"
