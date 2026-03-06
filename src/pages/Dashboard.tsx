@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { usePortfolioSnapshots } from "@/hooks/use-portfolio-snapshots";
 import { useHoldings } from "@/hooks/use-holdings";
 import { useAllNavHistory } from "@/hooks/use-all-nav-history";
+import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
 import { AppLayout } from "@/components/AppLayout";
 import { PortfolioChart } from "@/components/dashboard/PortfolioChart";
 import { PortfolioTWRChart } from "@/components/dashboard/PortfolioTWRChart";
@@ -18,6 +19,7 @@ export default function Dashboard() {
   const { data: allSnapshots } = usePortfolioSnapshots("ALL");
   const { data: holdings, isLoading: holdingsLoading } = useHoldings();
   const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange);
+  const { lastSuccess } = useLastSuccessfulSync();
 
   const latestSnapshot = snapshots?.[snapshots.length - 1];
   const totalCost = holdings?.reduce((s, h) => s + h.total_cost, 0) ?? 0;
@@ -29,6 +31,14 @@ export default function Dashboard() {
     if (!allSnapshots || allSnapshots.length < 2) return undefined;
     return computePortfolioTWRForRange(allSnapshots, chartRange).totalReturnPct;
   }, [allSnapshots, chartRange]);
+
+  // Primary: portfolio_snapshots.latest_nav_date
+  const latestNavDate = latestSnapshot?.latest_nav_date ?? null;
+  const lastSyncTime = lastSuccess?.completed_at
+    ? new Date(lastSuccess.completed_at).toLocaleString()
+    : latestSnapshot
+      ? new Date(latestSnapshot.created_at).toLocaleString()
+      : null;
 
   return (
     <AppLayout>
@@ -78,9 +88,11 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {latestSnapshot && (
+        {(latestNavDate || lastSyncTime) && (
           <p className="text-xs text-muted-foreground text-center">
-            Latest NAV date: {latestSnapshot.latest_nav_date ?? "—"} · Last updated: {new Date(latestSnapshot.created_at).toLocaleString()}
+            {latestNavDate ? `Latest NAV date: ${latestNavDate}` : ""}
+            {latestNavDate && lastSyncTime ? " · " : ""}
+            {lastSyncTime ? `Last updated: ${lastSyncTime}` : ""}
           </p>
         )}
       </div>
