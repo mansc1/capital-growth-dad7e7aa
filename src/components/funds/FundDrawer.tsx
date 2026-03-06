@@ -10,6 +10,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCreateFund, useUpdateFund } from "@/hooks/use-fund-mutations";
+import { SecFundSearchPopover } from "@/components/funds/SecFundSearchPopover";
+import type { SecFundResult } from "@/hooks/use-sec-fund-search";
 import type { Fund } from "@/types/portfolio";
 
 const fundSchema = z.object({
