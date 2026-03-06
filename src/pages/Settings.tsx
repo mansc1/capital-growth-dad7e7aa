@@ -74,10 +74,10 @@ export default function SettingsPage() {
     setResetting(true);
     try {
       const steps: { table: string; fn: () => Promise<{ error: any }> }[] = [
-        { table: "portfolio_snapshots", fn: () => supabase.from("portfolio_snapshots").delete().neq("id", "") },
-        { table: "sync_runs", fn: () => supabase.from("sync_runs").delete().neq("id", "") },
-        { table: "transactions", fn: () => supabase.from("transactions").delete().neq("id", "") },
-        { table: "nav_history", fn: () => supabase.from("nav_history").delete().neq("id", "") },
+        { table: "portfolio_snapshots", fn: () => supabase.from("portfolio_snapshots").delete().neq("id", "").select() },
+        { table: "sync_runs", fn: () => supabase.from("sync_runs").delete().neq("id", "").select() },
+        { table: "transactions", fn: () => supabase.from("transactions").delete().neq("id", "").select() },
+        { table: "nav_history", fn: () => supabase.from("nav_history").delete().neq("id", "").select() },
       ];
 
       for (const step of steps) {
