@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const NAV_SYNC_SECRET = "navsync_9f7c21c4a6e94b3b8d9a2e5c6f7d1b0";
 
 interface SyncResult {
   success: boolean;
@@ -23,13 +25,17 @@ export function useNavSync() {
     setError(null);
 
     try {
-      const { data, error: fnErr } = await supabase.functions.invoke("sync-nav", {
-        body: { trigger_type: "manual" },
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-nav`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-cron-secret": NAV_SYNC_SECRET,
+        },
+        body: JSON.stringify({ trigger_type: "manual" }),
       });
 
-      if (fnErr) throw new Error(fnErr.message);
-
-      const result = data as SyncResult;
+      if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
+      const result = await res.json() as SyncResult;
 
       // Invalidate all relevant queries
       await Promise.all([
