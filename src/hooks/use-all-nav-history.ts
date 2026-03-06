@@ -1,0 +1,26 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import type { NavHistory, ChartRange } from '@/types/portfolio';
+import { subMonths } from 'date-fns';
+
+export function useAllNavHistory(range: ChartRange = 'ALL') {
+  return useQuery({
+    queryKey: ['all_nav_history', range],
+    queryFn: async () => {
+      let query = supabase
+        .from('nav_history')
+        .select('*')
+        .order('nav_date', { ascending: true });
+
+      if (range !== 'ALL') {
+        const months = range === '1M' ? 1 : 3;
+        const from = subMonths(new Date(), months).toISOString().split('T')[0];
+        query = query.gte('nav_date', from);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as NavHistory[];
+    },
+  });
+}
