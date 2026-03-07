@@ -61,6 +61,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
   const prevFundId = useRef<string>("");
   const prevDate = useRef<string>("");
   const isEditInitialLoad = useRef(false);
+  const prevSecCode = useRef<string>("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(baseSchema),
