@@ -148,10 +148,18 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
 
   // NAV autofill effect
   useEffect(() => {
-    if (navManuallyEdited || isEditInitialLoad.current || nav === null) return;
-    const currentNav = form.getValues("nav_at_trade");
-    if (currentNav !== nav) {
-      form.setValue("nav_at_trade", nav);
+    if (navManuallyEdited || isEditInitialLoad.current) return;
+
+    if (nav !== null) {
+      const currentNav = form.getValues("nav_at_trade");
+      if (currentNav !== nav) {
+        form.setValue("nav_at_trade", nav);
+        navWasAutoFilled.current = true;
+      }
+    } else if (navWasAutoFilled.current) {
+      // New lookup returned null — clear stale auto-filled value
+      form.setValue("nav_at_trade", "" as any);
+      navWasAutoFilled.current = false;
     }
   }, [nav, navManuallyEdited, form]);
 
