@@ -326,7 +326,8 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
 
   // NAV helper text
   function renderNavHelper() {
-    if (navLoading && navFundId && watchDate) {
+    // Loading takes precedence — prevents flash of "No NAV found" messages
+    if ((navLoading || isResolving) && (navFundId || pendingSecFund) && watchDate) {
       return <p className="text-xs text-muted-foreground">Looking up NAV…</p>;
     }
     if (!navLoading && nav !== null && isExactMatch && !navManuallyEdited) {
@@ -339,6 +340,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         </p>
       );
     }
+    // resolvedFundId exists but no nav_history entry found
     if (!navLoading && nav === null && navFundId && watchDate) {
       return (
         <p className="text-xs text-muted-foreground">
@@ -348,10 +350,11 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         </p>
       );
     }
-    if (pendingSecFund) {
+    // Pending SEC fund with no matching fund in DB at all
+    if (pendingSecFund && !resolvedFundId && !isResolving) {
       return (
         <p className="text-xs text-muted-foreground">
-          NAV lookup available after fund is created. Enter NAV manually.
+          No NAV found for this fund yet. Enter NAV manually or sync NAV data after saving.
         </p>
       );
     }
