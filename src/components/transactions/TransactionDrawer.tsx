@@ -156,11 +156,12 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         form.setValue("nav_at_trade", nav);
         navWasAutoFilled.current = true;
       }
-    } else if (navWasAutoFilled.current) {
-      // New lookup returned null — clear stale auto-filled value
-      form.setValue("nav_at_trade", "" as any);
-      navWasAutoFilled.current = false;
-    }
+  } else {
+    // New lookup returned null — clear stale auto-filled or DB-loaded value
+    form.setValue("nav_at_trade", "" as any);
+    form.clearErrors("nav_at_trade");
+    navWasAutoFilled.current = false;
+  }
   }, [nav, navManuallyEdited, form]);
 
   // Auto-compute units or amount

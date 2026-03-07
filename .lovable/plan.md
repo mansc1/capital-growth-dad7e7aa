@@ -1,37 +1,36 @@
 
 
-# Fix: Remove `navWasAutoFilled` Guard from Clearing Branch
+# Manage Funds — Final Implementation Plan
 
-## Single change in `src/components/transactions/TransactionDrawer.tsx`
+## Adjustment: sync-nav fund identity
 
-**Lines 149–164** — replace the autofill effect:
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
 
-```typescript
-// NAV autofill effect
-useEffect(() => {
-  if (navManuallyEdited || isEditInitialLoad.current) return;
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
 
-  if (nav !== null) {
-    const currentNav = form.getValues("nav_at_trade");
-    if (currentNav !== nav) {
-      form.setValue("nav_at_trade", nav);
-      navWasAutoFilled.current = true;
-    }
-  } else {
-    // New lookup returned null — clear stale auto-filled or DB-loaded value
-    form.setValue("nav_at_trade", "" as any);
-    form.clearErrors("nav_at_trade");
-    navWasAutoFilled.current = false;
-  }
-}, [nav, navManuallyEdited, form]);
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
+
+## Everything else — unchanged from approved plan
+
+### Migration
+```sql
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
 ```
 
-Two differences from current code:
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
 
-1. `else if (navWasAutoFilled.current)` → `else` — removes the guard so stale DB-loaded values (edit mode after date change) are also cleared
-2. Added `form.clearErrors("nav_at_trade")` — keeps validation state consistent with the newly emptied field
-
-The existing `isEditInitialLoad.current` guard prevents clearing on mount; the tracking effect (lines 119–132) already resets `isEditInitialLoad` when fund/date/secCode changes, tying the clearing behavior to the current lookup context.
-
-One file, ~2 lines changed.
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 
