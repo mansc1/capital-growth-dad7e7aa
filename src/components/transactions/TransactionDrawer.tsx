@@ -120,20 +120,22 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
   }, [funds, watchFundId, newFundLabel]);
 
-  // Track actual fund/date value changes to reset manual override
+  // Track actual fund/date/secCode value changes to reset manual override
   useEffect(() => {
     const fundChanged = watchFundId !== prevFundId.current;
     const dateChanged = watchDate !== prevDate.current;
+    const secCodeChanged = pendingSecCode !== prevSecCode.current;
 
-    if (fundChanged || dateChanged) {
-      if (prevFundId.current || prevDate.current) {
+    if (fundChanged || dateChanged || secCodeChanged) {
+      if (prevFundId.current || prevDate.current || prevSecCode.current) {
         setNavManuallyEdited(false);
         isEditInitialLoad.current = false;
       }
       prevFundId.current = watchFundId;
       prevDate.current = watchDate;
+      prevSecCode.current = pendingSecCode;
     }
-  }, [watchFundId, watchDate]);
+  }, [watchFundId, watchDate, pendingSecCode]);
 
   // NAV lookup with fallback — pass undefined when pending fund
   const navFundId = pendingSecFund ? undefined : watchFundId;
