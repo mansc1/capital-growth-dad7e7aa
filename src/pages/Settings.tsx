@@ -35,7 +35,9 @@ export default function SettingsPage() {
 
   const handleSync = async () => {
     const result = await syncNav();
-    if (result?.success) {
+    if (result?.success && result.processedFunds === 0) {
+      toast.info("No portfolio funds available for NAV sync yet.");
+    } else if (result?.success) {
       toast.success(
         `NAV sync complete: ${result.insertedRows} inserted, ${result.updatedRows} updated, ${result.skippedFunds} skipped`
       );
