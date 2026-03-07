@@ -1,47 +1,36 @@
 
 
-# Historical NAV Backfill — Ready to Implement
+# Manage Funds — Final Implementation Plan
 
-All prior rounds of review are complete. The plan is fully specified. Here is the final implementation summary for the 3 files:
+## Adjustment: sync-nav fund identity
 
-## 1. NEW: `supabase/functions/backfill-nav/index.ts`
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
 
-Edge function secured via `x-cron-secret` (same pattern as sync-nav). Core flow:
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
 
-- Auth via `x-cron-secret`, create `sync_runs` row with `job_name: "nav_backfill"`
-- Compute `MIN(trade_date)` per fund from `transactions`, `MIN(nav_date)` per fund from `nav_history`
-- For each fund with a gap: compute range, apply 365-day cap (`actualStart = max(requestedStart, endDate - 364)`), resolve `proj_id` from `sec_fund_directory`
-- Unresolvable funds tracked in `unresolvedFunds[]` (separate from `apiErrors[]`)
-- `fundsProcessed` = only funds that enter the resolved backfill loop
-- `fundsSkipped` = funds with no gap (already covered)
-- Per fund: preload existing `nav_history` rows for the date range into a `Map<dateStr, number>` to reduce round trips
-- Iterate weekdays: call SEC API for every weekday (even if existing row exists, to detect changes)
-  - `datesChecked` = count of actual SEC API requests
-  - 204 response: increment `noDataDates`; if existing row exists for that date, log the inconsistency via `console.warn`
-  - Got NAV: compare with preloaded map → same = `rowsSkipped`, different = update → `rowsUpdated`, not in map = insert → `rowsInserted`
-- Throttle 200ms between API calls
-- Update `sync_runs` with final counts
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
 
-## 2. NEW: `src/hooks/use-nav-backfill.ts`
+## Everything else — unchanged from approved plan
 
-Client hook mirroring `use-nav-sync.ts`:
-- Calls `backfill-nav` via `fetch()` with `x-cron-secret` header
-- Typed `BackfillResult` interface
-- Invalidates: `nav_history`, `all_nav_history`, `sync_runs`, `portfolio_snapshots`, `holdings`, `latest_navs`
+### Migration
+```sql
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+```
 
-## 3. MODIFIED: `src/pages/Settings.tsx`
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
 
-Add new Card after SEC Fund Directory card:
-- Title: "Historical NAV Backfill"
-- Description explaining this is on-demand and may take several minutes
-- Button with `History` icon, spinner while running
-- Toast logic — one primary toast plus at most one combined warning toast:
-  - Success: "Backfill complete: N inserted, N updated across N fund(s)"
-  - No work needed: "All funds already have sufficient NAV coverage"
-  - Combined warning (if any of capped/unresolved/apiErrors present): join lines like "N fund(s) capped at 365 days", "N fund(s) not in SEC directory", "N API error(s)" with ". " separator into one `toast.warning()`
-  - Total failure: "Backfill failed"
-
-## No schema changes needed
-
-`sync_runs.job_name` already exists. `nav_history` has `UNIQUE(fund_id, nav_date)`.
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 
