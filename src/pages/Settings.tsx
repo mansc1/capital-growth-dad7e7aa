@@ -5,14 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, CheckCircle2, XCircle, Clock, Database } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Database, History } from "lucide-react";
 import { useNavSync } from "@/hooks/use-nav-sync";
+import { useNavBackfill } from "@/hooks/use-nav-backfill";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
   const { syncNav, isLoading: syncing } = useNavSync();
+  const { backfillNav, isLoading: backfilling } = useNavBackfill();
   const { lastSuccess, latestRun, isLoading: syncLoading } = useLastSuccessfulSync();
   const [refreshingDirectory, setRefreshingDirectory] = useState(false);
 
@@ -45,6 +47,40 @@ export default function SettingsPage() {
       toast.error(`Sync finished with errors: ${result.errors.join(", ")}`);
     } else {
       toast.error("NAV sync failed. Check your connection and try again.");
+    }
+  };
+
+  const handleBackfill = async () => {
+    const result = await backfillNav();
+    if (!result) {
+      toast.error("Backfill failed. Check your connection and try again.");
+      return;
+    }
+
+    // Primary toast
+    if (result.fundsProcessed === 0 && result.unresolvedFunds.length === 0) {
+      toast.info("All funds already have sufficient NAV coverage.");
+    } else if (result.fundsProcessed > 0) {
+      toast.success(
+        `Backfill complete: ${result.rowsInserted} inserted, ${result.rowsUpdated} updated across ${result.fundsProcessed} fund(s)`
+      );
+    } else {
+      toast.error("Backfill failed — no funds could be processed.");
+    }
+
+    // Combined warning toast (at most one)
+    const warnings: string[] = [];
+    if (result.cappedFunds.length > 0) {
+      warnings.push(`${result.cappedFunds.length} fund(s) capped at 365 days`);
+    }
+    if (result.unresolvedFunds.length > 0) {
+      warnings.push(`${result.unresolvedFunds.length} fund(s) not in SEC directory`);
+    }
+    if (result.apiErrors.length > 0) {
+      warnings.push(`${result.apiErrors.length} API error(s)`);
+    }
+    if (warnings.length > 0) {
+      toast.warning(warnings.join(". "));
     }
   };
 
@@ -157,6 +193,21 @@ export default function SettingsPage() {
             <Button onClick={handleRefreshDirectory} disabled={refreshingDirectory} size="sm">
               <Database className={`h-4 w-4 mr-2 ${refreshingDirectory ? "animate-pulse" : ""}`} />
               {refreshingDirectory ? "Refreshing…" : "Refresh SEC Directory"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Historical NAV Backfill</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Fetch missing historical NAV data for funds with transactions older than existing coverage. This on-demand process queries dates individually and may take several minutes depending on the number of funds and date range.
+            </p>
+            <Button onClick={handleBackfill} disabled={backfilling} size="sm">
+              <History className={`h-4 w-4 mr-2 ${backfilling ? "animate-spin" : ""}`} />
+              {backfilling ? "Backfilling…" : "Backfill Historical NAV"}
             </Button>
           </CardContent>
         </Card>
