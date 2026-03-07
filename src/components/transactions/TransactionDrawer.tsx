@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useActiveFunds } from "@/hooks/use-active-funds";
 import { useEnsureFund } from "@/hooks/use-ensure-fund";
 import { useNavForTradeDate } from "@/hooks/use-nav-for-trade-date";
+import { useResolveFundIdBySecCode } from "@/hooks/use-resolve-fund-id-by-sec-code";
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
 import { SecFundSearchPopover } from "@/components/funds/SecFundSearchPopover";
 import { supabase } from "@/integrations/supabase/client";
