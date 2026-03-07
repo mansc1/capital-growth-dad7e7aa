@@ -62,6 +62,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
   const prevDate = useRef<string>("");
   const isEditInitialLoad = useRef(false);
   const prevSecCode = useRef<string>("");
+  const navWasAutoFilled = useRef(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(baseSchema),
@@ -96,6 +97,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     setNewFundLabel(null);
     setNavManuallyEdited(false);
     isEditInitialLoad.current = false;
+    navWasAutoFilled.current = false;
     prevFundId.current = "";
     prevDate.current = "";
     prevSecCode.current = "";
@@ -146,10 +148,18 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
 
   // NAV autofill effect
   useEffect(() => {
-    if (navManuallyEdited || isEditInitialLoad.current || nav === null) return;
-    const currentNav = form.getValues("nav_at_trade");
-    if (currentNav !== nav) {
-      form.setValue("nav_at_trade", nav);
+    if (navManuallyEdited || isEditInitialLoad.current) return;
+
+    if (nav !== null) {
+      const currentNav = form.getValues("nav_at_trade");
+      if (currentNav !== nav) {
+        form.setValue("nav_at_trade", nav);
+        navWasAutoFilled.current = true;
+      }
+    } else if (navWasAutoFilled.current) {
+      // New lookup returned null — clear stale auto-filled value
+      form.setValue("nav_at_trade", "" as any);
+      navWasAutoFilled.current = false;
     }
   }, [nav, navManuallyEdited, form]);
 
@@ -189,6 +199,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
       setNewFundLabel(null);
       setNavManuallyEdited(false);
       isEditInitialLoad.current = true;
+      navWasAutoFilled.current = false;
       prevFundId.current = editTransaction.fund_id;
       prevDate.current = editTransaction.trade_date;
     } else {
@@ -208,6 +219,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
       setNewFundLabel(null);
       setNavManuallyEdited(false);
       isEditInitialLoad.current = false;
+      navWasAutoFilled.current = false;
       prevFundId.current = "";
       prevDate.current = defaultDate;
     }
@@ -483,6 +495,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
                       onChange={(e) => {
                         field.onChange(Number(e.target.value));
                         setNavManuallyEdited(true);
+                        navWasAutoFilled.current = false;
                       }}
                     />
                   </FormControl>
