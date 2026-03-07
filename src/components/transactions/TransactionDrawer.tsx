@@ -137,8 +137,11 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
   }, [watchFundId, watchDate, pendingSecCode]);
 
-  // NAV lookup with fallback — pass undefined when pending fund
-  const navFundId = pendingSecFund ? undefined : watchFundId;
+  // NAV lookup — resolve pending fund's sec_fund_code to an existing fund_id for autofill
+  const { resolvedFundId, isResolving } = useResolveFundIdBySecCode(
+    pendingSecFund ? pendingSecFund.proj_abbr_name : undefined
+  );
+  const navFundId = pendingSecFund ? resolvedFundId : watchFundId;
   const { nav, navDateUsed, isExactMatch, isLoading: navLoading } = useNavForTradeDate(navFundId, watchDate);
 
   // NAV autofill effect
