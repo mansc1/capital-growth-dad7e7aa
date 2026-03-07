@@ -199,6 +199,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
       setNewFundLabel(null);
       setNavManuallyEdited(false);
       isEditInitialLoad.current = true;
+      navWasAutoFilled.current = false;
       prevFundId.current = editTransaction.fund_id;
       prevDate.current = editTransaction.trade_date;
     } else {
