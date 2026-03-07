@@ -1,87 +1,36 @@
 
 
-# Enhanced NAV Autofill with Fallback — Implementation Plan
+# Manage Funds — Final Implementation Plan
 
-## Summary
-Replace the exact-match-only `useNavLookup` with a new `useNavForTradeDate` hook that falls back to the most recent NAV on or before the trade date. Add manual override tracking, edit-mode guards, and contextual helper text in the Transaction Drawer.
+## Adjustment: sync-nav fund identity
 
----
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
 
-## Changes (3 files)
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
 
-### 1. NEW: `src/hooks/use-nav-for-trade-date.ts`
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
 
-Single query against `nav_history`:
-- `eq('fund_id', fundId)` + `lte('nav_date', tradeDate)` + `order('nav_date', desc)` + `limit(1)` + `maybeSingle()`
-- Enabled only when both `fundId` and `tradeDate` are truthy
-- Returns `{ nav: number | null, navDateUsed: string | null, isExactMatch: boolean, isLoading: boolean }`
-- `isExactMatch = navDateUsed === tradeDate`
-- `isLoading` only true when both inputs are present and query is still loading
+## Everything else — unchanged from approved plan
 
-### 2. EDIT: `src/components/transactions/TransactionDrawer.tsx`
-
-**Imports:** Replace `useNavLookup` from `use-nav-history` with `useNavForTradeDate` from `use-nav-for-trade-date`. Remove `Alert`, `AlertDescription`, `AlertTriangle` imports.
-
-**New state/refs:**
-- `navManuallyEdited: boolean` state (default `false`)
-- `prevFundId` and `prevDate` refs to track actual value changes (not just rerenders)
-- `isEditInitialLoad` ref — set `true` when edit form populates, set `false` on first fund/date change
-
-**Reset logic (dedicated effect):**
-- Compare `watchFundId`/`watchDate` against `prevFundId`/`prevDate` refs
-- Only reset `navManuallyEdited = false` when values actually change
-- Update refs after comparison
-- Also set `isEditInitialLoad = false` when values change during edit
-
-**Hook call:** `const { nav, navDateUsed, isExactMatch, isLoading: navLoading } = useNavForTradeDate(watchFundId, watchDate);`
-
-**Autofill effect** (replaces old navLookup effect):
-- Guard: skip if `navManuallyEdited`, `isEditInitialLoad`, or `nav === null`
-- Before calling `setValue`, check if `form.getValues("nav_at_trade")` already equals `nav` to avoid unnecessary updates
-- Remove old `navNotFound` state entirely
-
-**Edit mode setup** (in the existing editTransaction effect):
-- Set `isEditInitialLoad.current = true` when populating edit form
-- Set `isEditInitialLoad.current = false` and `navManuallyEdited = false` in the else (new transaction) branch
-
-**NAV input field:**
-- Add `navManuallyEdited = true` to the onChange handler alongside `field.onChange`
-- Remove old `(auto-filled)` label text from FormLabel
-
-**Replace the yellow Alert block** (lines 297-304) and old label text with helper text below the NAV field:
-
-```
-{navLoading && watchFundId && watchDate && (
-  <p className="text-xs text-muted-foreground">Looking up NAV…</p>
-)}
-{!navLoading && nav !== null && isExactMatch && !navManuallyEdited && (
-  <p className="text-xs text-muted-foreground">NAV auto-filled from {navDateUsed}</p>
-)}
-{!navLoading && nav !== null && !isExactMatch && !navManuallyEdited && (
-  <p className="text-xs text-amber-600 dark:text-amber-400">
-    Using latest available NAV from {navDateUsed} (trade date: {watchDate})
-  </p>
-)}
-{!navLoading && nav === null && watchFundId && watchDate && (
-  <p className="text-xs text-muted-foreground">
-    {isBuyType || isSellType
-      ? "No NAV found for this fund. Enter NAV manually or sync NAV data first."
-      : "No NAV found for this date. Enter NAV manually."}
-  </p>
-)}
+### Migration
+```sql
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
 ```
 
-The fallback text uses `text-amber-600` to be visually distinct from the exact-match text, making it clear an earlier date's NAV is being used.
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
 
-### 3. EDIT: `src/hooks/use-nav-history.ts`
-
-Remove the `useNavLookup` function (lines 21-37). Keep `useNavHistory` and `useLatestNavs` unchanged.
-
----
-
-## What stays unchanged
-- All transaction CRUD logic, units/amount auto-compute, sell validation
-- SEC fund search, fund selection, dividend handling
-- NAV sync, holdings, dashboard, portfolio snapshots
-- No database or schema changes needed
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 

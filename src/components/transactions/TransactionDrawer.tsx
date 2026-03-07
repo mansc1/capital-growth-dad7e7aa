@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,11 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
 import { useActiveFunds } from "@/hooks/use-active-funds";
 import { useEnsureFund } from "@/hooks/use-ensure-fund";
-import { useNavLookup } from "@/hooks/use-nav-history";
+import { useNavForTradeDate } from "@/hooks/use-nav-for-trade-date";
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
 import { SecFundSearchPopover } from "@/components/funds/SecFundSearchPopover";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,8 +51,11 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
   const { mutateAsync: ensureFund, isPending: isEnsuring } = useEnsureFund();
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
-  const [navNotFound, setNavNotFound] = useState(false);
   const [newFundLabel, setNewFundLabel] = useState<string | null>(null);
+  const [navManuallyEdited, setNavManuallyEdited] = useState(false);
+  const prevFundId = useRef<string>("");
+  const prevDate = useRef<string>("");
+  const isEditInitialLoad = useRef(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(baseSchema),
@@ -89,17 +90,33 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
   }, [funds, watchFundId, newFundLabel]);
 
-  // NAV auto-fill
-  const { data: navLookup } = useNavLookup(watchFundId, watchDate);
-
+  // Track actual fund/date value changes to reset manual override
   useEffect(() => {
-    if (navLookup !== undefined && navLookup !== null) {
-      form.setValue("nav_at_trade", Number(navLookup));
-      setNavNotFound(false);
-    } else if (watchFundId && watchDate && navLookup === null) {
-      setNavNotFound(true);
+    const fundChanged = watchFundId !== prevFundId.current;
+    const dateChanged = watchDate !== prevDate.current;
+
+    if (fundChanged || dateChanged) {
+      // Only reset if we had previous values (not initial mount)
+      if (prevFundId.current || prevDate.current) {
+        setNavManuallyEdited(false);
+        isEditInitialLoad.current = false;
+      }
+      prevFundId.current = watchFundId;
+      prevDate.current = watchDate;
     }
-  }, [navLookup, watchFundId, watchDate]);
+  }, [watchFundId, watchDate]);
+
+  // NAV lookup with fallback
+  const { nav, navDateUsed, isExactMatch, isLoading: navLoading } = useNavForTradeDate(watchFundId, watchDate);
+
+  // NAV autofill effect
+  useEffect(() => {
+    if (navManuallyEdited || isEditInitialLoad.current || nav === null) return;
+    const currentNav = form.getValues("nav_at_trade");
+    if (currentNav !== nav) {
+      form.setValue("nav_at_trade", nav);
+    }
+  }, [nav, navManuallyEdited, form]);
 
   // Auto-compute units or amount
   useEffect(() => {
@@ -134,11 +151,16 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         dividend_type: editTransaction.dividend_type,
       });
       setNewFundLabel(null);
+      setNavManuallyEdited(false);
+      isEditInitialLoad.current = true;
+      prevFundId.current = editTransaction.fund_id;
+      prevDate.current = editTransaction.trade_date;
     } else {
+      const defaultDate = new Date().toISOString().split("T")[0];
       form.reset({
         fund_id: "",
         tx_type: "buy",
-        trade_date: new Date().toISOString().split("T")[0],
+        trade_date: defaultDate,
         units: 0,
         amount: 0,
         nav_at_trade: 0,
@@ -147,6 +169,10 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         dividend_type: null,
       });
       setNewFundLabel(null);
+      setNavManuallyEdited(false);
+      isEditInitialLoad.current = false;
+      prevFundId.current = "";
+      prevDate.current = defaultDate;
     }
   }, [editTransaction, open]);
 
@@ -213,6 +239,33 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     : newFundLabel
       ? watchFundId
       : "";
+
+  // NAV helper text
+  function renderNavHelper() {
+    if (navLoading && watchFundId && watchDate) {
+      return <p className="text-xs text-muted-foreground">Looking up NAV…</p>;
+    }
+    if (!navLoading && nav !== null && isExactMatch && !navManuallyEdited) {
+      return <p className="text-xs text-muted-foreground">NAV auto-filled from {navDateUsed}</p>;
+    }
+    if (!navLoading && nav !== null && !isExactMatch && !navManuallyEdited) {
+      return (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          Using latest available NAV from {navDateUsed} (trade date: {watchDate})
+        </p>
+      );
+    }
+    if (!navLoading && nav === null && watchFundId && watchDate) {
+      return (
+        <p className="text-xs text-muted-foreground">
+          {isBuyType || isSellType
+            ? "No NAV found for this fund. Enter NAV manually or sync NAV data first."
+            : "No NAV found for this date. Enter NAV manually."}
+        </p>
+      );
+    }
+    return null;
+  }
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -294,29 +347,24 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
               )}
             />
 
-            {navNotFound && (
-              <Alert variant="destructive" className="border-yellow-500/50 bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-xs">
-                  NAV not found for this date. Please enter manually.
-                </AlertDescription>
-              </Alert>
-            )}
-
             <FormField
               control={form.control}
               name="nav_at_trade"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>NAV at Trade {!navNotFound && watchFundId && watchDate ? "(auto-filled)" : ""}</FormLabel>
+                  <FormLabel>NAV at Trade</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
                       step="0.0001"
                       {...field}
-                      onChange={(e) => field.onChange(Number(e.target.value))}
+                      onChange={(e) => {
+                        field.onChange(Number(e.target.value));
+                        setNavManuallyEdited(true);
+                      }}
                     />
                   </FormControl>
+                  {renderNavHelper()}
                   <FormMessage />
                 </FormItem>
               )}

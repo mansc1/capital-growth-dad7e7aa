@@ -18,24 +18,6 @@ export function useNavHistory(fundId?: string) {
   });
 }
 
-export function useNavLookup(fundId: string | undefined, date: string | undefined) {
-  return useQuery({
-    queryKey: ['nav_lookup', fundId, date],
-    queryFn: async () => {
-      if (!fundId || !date) return null;
-      const { data, error } = await supabase
-        .from('nav_history')
-        .select('nav_per_unit')
-        .eq('fund_id', fundId)
-        .eq('nav_date', date)
-        .maybeSingle();
-      if (error) throw error;
-      return data?.nav_per_unit ?? null;
-    },
-    enabled: !!fundId && !!date,
-  });
-}
-
 export function useLatestNavs() {
   return useQuery({
     queryKey: ['latest_navs'],
