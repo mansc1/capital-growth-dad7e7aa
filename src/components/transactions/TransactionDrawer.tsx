@@ -495,6 +495,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
                       onChange={(e) => {
                         field.onChange(Number(e.target.value));
                         setNavManuallyEdited(true);
+                        navWasAutoFilled.current = false;
                       }}
                     />
                   </FormControl>
