@@ -98,6 +98,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     isEditInitialLoad.current = false;
     prevFundId.current = "";
     prevDate.current = "";
+    prevSecCode.current = "";
   }
 
   function handleClose() {
