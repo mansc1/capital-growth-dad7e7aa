@@ -1,30 +1,36 @@
 
 
-# Fix: Empty-portfolio sync runs not displaying in Settings
+# Manage Funds — Final Implementation Plan
 
-## Root Cause
+## Adjustment: sync-nav fund identity
 
-The `sync-nav` edge function correctly creates and completes a `sync_runs` row for empty-portfolio syncs. The problem is on the **read side**: the `sync_runs` table only has an "Authenticated read access" SELECT policy, but the app uses the **anon** role (no auth). The client query returns empty results, so the Settings card shows "No syncs yet."
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
 
-## Changes
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
 
-### 1. Database Migration — Add anon read policy to `sync_runs`
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
 
-**New migration** adding an anon SELECT policy to match the pattern used by `funds`, `nav_history`, and other tables:
+## Everything else — unchanged from approved plan
 
+### Migration
 ```sql
-CREATE POLICY "Anon read access"
-ON public.sync_runs
-FOR SELECT
-TO anon
-USING (true);
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
 ```
 
-This is the only change needed. The edge function already persists sync_runs correctly for empty portfolios, and the Settings UI already reads from `useLastSuccessfulSync()` which queries sync_runs. Once the anon role can read the table, all fields (provider, status, completed_at) will display correctly.
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
 
-### Files Changed
-
-| File | Action |
-|------|--------|
-| `supabase/migrations/[timestamp]_add_anon_read_sync_runs.sql` | New — add anon SELECT policy |
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 
