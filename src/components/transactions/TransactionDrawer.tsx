@@ -88,6 +88,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
   const isBuyType = watchTxType === "buy" || watchTxType === "switch_in";
   const isSellType = watchTxType === "sell" || watchTxType === "switch_out";
   const isDividend = watchTxType === "dividend";
+  const pendingSecCode = pendingSecFund?.proj_abbr_name?.trim().toUpperCase() ?? "";
 
   // --- State reset helpers ---
   function resetPendingState() {
