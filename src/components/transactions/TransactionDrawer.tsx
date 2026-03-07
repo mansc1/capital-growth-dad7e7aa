@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { X } from "lucide-react";
+import { toast } from "sonner";
 import { useActiveFunds } from "@/hooks/use-active-funds";
 import { useEnsureFund } from "@/hooks/use-ensure-fund";
 import { useNavForTradeDate } from "@/hooks/use-nav-for-trade-date";
@@ -17,6 +19,7 @@ import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transact
 import { SecFundSearchPopover } from "@/components/funds/SecFundSearchPopover";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransactionWithFund, TxType, DividendType } from "@/types/portfolio";
+import type { SecFundResult } from "@/hooks/use-sec-fund-search";
 
 const txTypes: { value: TxType; label: string }[] = [
   { value: "buy", label: "Buy" },
@@ -27,7 +30,7 @@ const txTypes: { value: TxType; label: string }[] = [
 ];
 
 const baseSchema = z.object({
-  fund_id: z.string().min(1, "Select a fund"),
+  fund_id: z.string(),
   tx_type: z.enum(["buy", "sell", "dividend", "switch_in", "switch_out"]),
   trade_date: z.string().min(1, "Required"),
   units: z.number().min(0.0001, "Must be positive"),
@@ -52,6 +55,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
   const [newFundLabel, setNewFundLabel] = useState<string | null>(null);
+  const [pendingSecFund, setPendingSecFund] = useState<SecFundResult | null>(null);
   const [navManuallyEdited, setNavManuallyEdited] = useState(false);
   const prevFundId = useRef<string>("");
   const prevDate = useRef<string>("");
@@ -83,6 +87,28 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
   const isSellType = watchTxType === "sell" || watchTxType === "switch_out";
   const isDividend = watchTxType === "dividend";
 
+  // --- State reset helpers ---
+  function resetPendingState() {
+    setPendingSecFund(null);
+    setNewFundLabel(null);
+    setNavManuallyEdited(false);
+    isEditInitialLoad.current = false;
+    prevFundId.current = "";
+    prevDate.current = "";
+  }
+
+  function handleClose() {
+    resetPendingState();
+    onClose();
+  }
+
+  function clearPendingFund() {
+    setPendingSecFund(null);
+    setNewFundLabel(null);
+    form.setValue("fund_id", "");
+    form.clearErrors("fund_id");
+  }
+
   // Clear newFundLabel when the fund appears in the dropdown
   useEffect(() => {
     if (newFundLabel && funds?.find((f) => f.id === watchFundId)) {
@@ -96,7 +122,6 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     const dateChanged = watchDate !== prevDate.current;
 
     if (fundChanged || dateChanged) {
-      // Only reset if we had previous values (not initial mount)
       if (prevFundId.current || prevDate.current) {
         setNavManuallyEdited(false);
         isEditInitialLoad.current = false;
@@ -106,8 +131,9 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
   }, [watchFundId, watchDate]);
 
-  // NAV lookup with fallback
-  const { nav, navDateUsed, isExactMatch, isLoading: navLoading } = useNavForTradeDate(watchFundId, watchDate);
+  // NAV lookup with fallback — pass undefined when pending fund
+  const navFundId = pendingSecFund ? undefined : watchFundId;
+  const { nav, navDateUsed, isExactMatch, isLoading: navLoading } = useNavForTradeDate(navFundId, watchDate);
 
   // NAV autofill effect
   useEffect(() => {
@@ -150,6 +176,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         note: editTransaction.note ?? "",
         dividend_type: editTransaction.dividend_type,
       });
+      setPendingSecFund(null);
       setNewFundLabel(null);
       setNavManuallyEdited(false);
       isEditInitialLoad.current = true;
@@ -168,6 +195,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         note: "",
         dividend_type: null,
       });
+      setPendingSecFund(null);
       setNewFundLabel(null);
       setNavManuallyEdited(false);
       isEditInitialLoad.current = false;
@@ -176,10 +204,10 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
   }, [editTransaction, open]);
 
-  // Get current units for sell validation
+  // Get current units for sell validation — skip when pending fund
   const [currentUnits, setCurrentUnits] = useState<number>(0);
   useEffect(() => {
-    if (isSellType && watchFundId) {
+    if (isSellType && watchFundId && !pendingSecFund) {
       supabase
         .from("transactions")
         .select("fund_id, tx_type, units, dividend_type, trade_date")
@@ -198,22 +226,57 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
           }
         });
     }
-  }, [isSellType, watchFundId]);
+  }, [isSellType, watchFundId, pendingSecFund]);
 
-  async function handleSecFundSelect(result: import("@/hooks/use-sec-fund-search").SecFundResult) {
-    const fundId = await ensureFund(result);
-    form.setValue("fund_id", fundId);
-    setNewFundLabel(result.proj_abbr_name);
+  function handleSecFundSelect(result: SecFundResult) {
+    const norm = result.proj_abbr_name.trim().toUpperCase();
+    // Check if this fund already exists in the active list
+    const existing = funds?.find((f) => {
+      const secCode = f.sec_fund_code?.trim().toUpperCase();
+      const fundCode = f.fund_code.trim().toUpperCase();
+      return secCode === norm || fundCode === norm;
+    });
+
+    if (existing) {
+      form.setValue("fund_id", existing.id);
+      setPendingSecFund(null);
+      setNewFundLabel(null);
+      form.clearErrors("fund_id");
+    } else {
+      setPendingSecFund(result);
+      setNewFundLabel(result.proj_abbr_name);
+      form.setValue("fund_id", "");
+      form.clearErrors("fund_id");
+    }
   }
 
   async function onSubmit(values: FormValues) {
-    if (isSellType && values.units > currentUnits) {
+    // Submit-time fund validation
+    if (!values.fund_id && !pendingSecFund) {
+      form.setError("fund_id", { message: "Select a fund" });
+      return;
+    }
+
+    // Sell validation — skip when pending (new fund has no units)
+    if (isSellType && !pendingSecFund && values.units > currentUnits) {
       form.setError("units", { message: `Cannot sell more than ${currentUnits.toFixed(4)} units held` });
       return;
     }
 
+    let fundId = values.fund_id;
+
+    // Deferred fund creation
+    if (pendingSecFund) {
+      try {
+        fundId = await ensureFund(pendingSecFund);
+      } catch {
+        // ensureFund hook shows its own error toast
+        return;
+      }
+    }
+
     const payload = {
-      fund_id: values.fund_id,
+      fund_id: fundId,
       tx_type: values.tx_type as TxType,
       trade_date: values.trade_date,
       units: values.units,
@@ -224,12 +287,24 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
       dividend_type: isDividend ? (values.dividend_type as DividendType) : null,
     };
 
-    if (editTransaction) {
-      await updateMutation.mutateAsync({ id: editTransaction.id, ...payload });
-    } else {
-      await createMutation.mutateAsync(payload);
+    try {
+      if (editTransaction) {
+        await updateMutation.mutateAsync({ id: editTransaction.id, ...payload });
+      } else {
+        await createMutation.mutateAsync(payload);
+      }
+      resetPendingState();
+      onClose();
+    } catch (err) {
+      // Fund was created but transaction save failed — transition to normal selected-fund state
+      if (pendingSecFund || newFundLabel) {
+        form.setValue("fund_id", fundId);
+        setPendingSecFund(null);
+        setNewFundLabel(null);
+        form.clearErrors("fund_id");
+        toast.error("Fund was created but transaction save failed. You can retry.");
+      }
     }
-    onClose();
   }
 
   // Determine the display value for the fund selector
@@ -242,7 +317,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
 
   // NAV helper text
   function renderNavHelper() {
-    if (navLoading && watchFundId && watchDate) {
+    if (navLoading && navFundId && watchDate) {
       return <p className="text-xs text-muted-foreground">Looking up NAV…</p>;
     }
     if (!navLoading && nav !== null && isExactMatch && !navManuallyEdited) {
@@ -255,7 +330,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         </p>
       );
     }
-    if (!navLoading && nav === null && watchFundId && watchDate) {
+    if (!navLoading && nav === null && navFundId && watchDate) {
       return (
         <p className="text-xs text-muted-foreground">
           {isBuyType || isSellType
@@ -264,11 +339,20 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         </p>
       );
     }
+    if (pendingSecFund) {
+      return (
+        <p className="text-xs text-muted-foreground">
+          NAV lookup available after fund is created. Enter NAV manually.
+        </p>
+      );
+    }
     return null;
   }
 
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+    <Sheet open={open} onOpenChange={(o) => !o && handleClose()}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{editTransaction ? "Edit Transaction" : "Add Transaction"}</SheetTitle>
@@ -308,26 +392,52 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel>Fund</FormLabel>
-                    <SecFundSearchPopover onSelect={handleSecFundSelect} />
+                    {!pendingSecFund && (
+                      <SecFundSearchPopover onSelect={handleSecFundSelect} />
+                    )}
                   </div>
-                  <Select value={fundDisplayValue} onValueChange={(v) => { field.onChange(v); setNewFundLabel(null); }}>
-                    <FormControl>
-                      <SelectTrigger disabled={isEnsuring}>
-                        <SelectValue placeholder={isEnsuring ? "Adding fund…" : "Select fund"} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {/* Show newly added fund if not yet in the list */}
-                      {newFundLabel && !selectedFundInList && watchFundId && (
-                        <SelectItem value={watchFundId}>
-                          {newFundLabel} (just added)
-                        </SelectItem>
-                      )}
-                      {funds?.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.fund_code} — {f.fund_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                  {pendingSecFund ? (
+                    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                      <div>
+                        <span className="text-sm font-medium">{pendingSecFund.proj_abbr_name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">(new — will be created on save)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearPendingFund}
+                        className="text-muted-foreground hover:text-foreground ml-2"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={fundDisplayValue}
+                      onValueChange={(v) => {
+                        field.onChange(v);
+                        setPendingSecFund(null);
+                        setNewFundLabel(null);
+                        form.clearErrors("fund_id");
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger disabled={isEnsuring}>
+                          <SelectValue placeholder={isEnsuring ? "Adding fund…" : "Select fund"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {newFundLabel && !selectedFundInList && watchFundId && (
+                          <SelectItem value={watchFundId}>
+                            {newFundLabel} (just added)
+                          </SelectItem>
+                        )}
+                        {funds?.map((f) => (
+                          <SelectItem key={f.id} value={f.id}>{f.fund_code} — {f.fund_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -414,7 +524,10 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
                   name="units"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Units to Sell (max: {currentUnits.toFixed(4)})</FormLabel>
+                      <FormLabel>
+                        Units to Sell
+                        {!pendingSecFund && ` (max: ${currentUnits.toFixed(4)})`}
+                      </FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -473,15 +586,19 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
             />
 
             <div className="flex gap-2 pt-4">
-              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+              <Button type="button" variant="outline" className="flex-1" onClick={handleClose}>
                 Cancel
               </Button>
               <Button
                 type="submit"
                 className="flex-1"
-                disabled={createMutation.isPending || updateMutation.isPending || isEnsuring}
+                disabled={isSubmitting || isEnsuring}
               >
-                {editTransaction ? "Update" : "Add"}
+                {isEnsuring && pendingSecFund
+                  ? "Creating fund…"
+                  : editTransaction
+                    ? "Update"
+                    : "Add"}
               </Button>
             </div>
           </form>

@@ -94,11 +94,39 @@ Deno.serve(async (req) => {
     if (syncErr) throw new Error(`Failed to create sync_run: ${syncErr.message}`);
     syncRunId = syncRun.id;
 
-    // 2. Load active funds (including sec_fund_code for lookup)
+    // 2. Get fund IDs that have transactions (portfolio-backed funds only)
+    const { data: txRows, error: txErr } = await supabase
+      .from("transactions")
+      .select("fund_id");
+
+    if (txErr) throw new Error(`Failed to query transactions: ${txErr.message}`);
+
+    const txFundIds: string[] = [...new Set(
+      (txRows ?? []).map((r) => r.fund_id).filter((id): id is string => !!id)
+    )];
+
+    const emptySuccessResponse = (message: string) => {
+      return new Response(
+        JSON.stringify({ success: true, processedFunds: 0, insertedRows: 0, updatedRows: 0, skippedFunds: 0, latestNavDate: null, syncRunId, provider: providerName, errors: [], message }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    };
+
+    if (txFundIds.length === 0) {
+      await supabase
+        .from("sync_runs")
+        .update({ status: "success", completed_at: new Date().toISOString(), processed_count: 0, provider: providerName })
+        .eq("id", syncRunId);
+
+      return emptySuccessResponse("No portfolio funds to sync");
+    }
+
+    // Load active funds filtered to those with transactions
     const { data: funds, error: fundsErr } = await supabase
       .from("funds")
       .select("id, fund_code, sec_fund_code")
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .in("id", txFundIds);
 
     if (fundsErr) throw new Error(`Failed to load funds: ${fundsErr.message}`);
     if (!funds || funds.length === 0) {
@@ -107,10 +135,7 @@ Deno.serve(async (req) => {
         .update({ status: "success", completed_at: new Date().toISOString(), processed_count: 0, provider: providerName })
         .eq("id", syncRunId);
 
-      return new Response(
-        JSON.stringify({ success: true, processedFunds: 0, insertedRows: 0, updatedRows: 0, skippedFunds: 0, latestNavDate: null, syncRunId, provider: providerName, errors: [] }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return emptySuccessResponse("No active portfolio funds to sync");
     }
 
     // 3. Build lookup codes from original fund records
