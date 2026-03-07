@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useActiveFunds } from "@/hooks/use-active-funds";
 import { useEnsureFund } from "@/hooks/use-ensure-fund";
 import { useNavForTradeDate } from "@/hooks/use-nav-for-trade-date";
+import { useResolveFundIdBySecCode } from "@/hooks/use-resolve-fund-id-by-sec-code";
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
 import { SecFundSearchPopover } from "@/components/funds/SecFundSearchPopover";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,6 +61,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
   const prevFundId = useRef<string>("");
   const prevDate = useRef<string>("");
   const isEditInitialLoad = useRef(false);
+  const prevSecCode = useRef<string>("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(baseSchema),
@@ -86,6 +88,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
   const isBuyType = watchTxType === "buy" || watchTxType === "switch_in";
   const isSellType = watchTxType === "sell" || watchTxType === "switch_out";
   const isDividend = watchTxType === "dividend";
+  const pendingSecCode = pendingSecFund?.proj_abbr_name?.trim().toUpperCase() ?? "";
 
   // --- State reset helpers ---
   function resetPendingState() {
@@ -95,6 +98,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     isEditInitialLoad.current = false;
     prevFundId.current = "";
     prevDate.current = "";
+    prevSecCode.current = "";
   }
 
   function handleClose() {
@@ -116,23 +120,28 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
   }, [funds, watchFundId, newFundLabel]);
 
-  // Track actual fund/date value changes to reset manual override
+  // Track actual fund/date/secCode value changes to reset manual override
   useEffect(() => {
     const fundChanged = watchFundId !== prevFundId.current;
     const dateChanged = watchDate !== prevDate.current;
+    const secCodeChanged = pendingSecCode !== prevSecCode.current;
 
-    if (fundChanged || dateChanged) {
-      if (prevFundId.current || prevDate.current) {
+    if (fundChanged || dateChanged || secCodeChanged) {
+      if (prevFundId.current || prevDate.current || prevSecCode.current) {
         setNavManuallyEdited(false);
         isEditInitialLoad.current = false;
       }
       prevFundId.current = watchFundId;
       prevDate.current = watchDate;
+      prevSecCode.current = pendingSecCode;
     }
-  }, [watchFundId, watchDate]);
+  }, [watchFundId, watchDate, pendingSecCode]);
 
-  // NAV lookup with fallback — pass undefined when pending fund
-  const navFundId = pendingSecFund ? undefined : watchFundId;
+  // NAV lookup — resolve pending fund's sec_fund_code to an existing fund_id for autofill
+  const { resolvedFundId, isResolving } = useResolveFundIdBySecCode(
+    pendingSecFund ? pendingSecFund.proj_abbr_name : undefined
+  );
+  const navFundId = pendingSecFund ? resolvedFundId : watchFundId;
   const { nav, navDateUsed, isExactMatch, isLoading: navLoading } = useNavForTradeDate(navFundId, watchDate);
 
   // NAV autofill effect
@@ -317,7 +326,8 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
 
   // NAV helper text
   function renderNavHelper() {
-    if (navLoading && navFundId && watchDate) {
+    // Loading takes precedence — prevents flash of "No NAV found" messages
+    if ((navLoading || isResolving) && (navFundId || pendingSecFund) && watchDate) {
       return <p className="text-xs text-muted-foreground">Looking up NAV…</p>;
     }
     if (!navLoading && nav !== null && isExactMatch && !navManuallyEdited) {
@@ -330,6 +340,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         </p>
       );
     }
+    // resolvedFundId exists but no nav_history entry found
     if (!navLoading && nav === null && navFundId && watchDate) {
       return (
         <p className="text-xs text-muted-foreground">
@@ -339,10 +350,11 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         </p>
       );
     }
-    if (pendingSecFund) {
+    // Pending SEC fund with no matching fund in DB at all
+    if (pendingSecFund && !resolvedFundId && !isResolving) {
       return (
         <p className="text-xs text-muted-foreground">
-          NAV lookup available after fund is created. Enter NAV manually.
+          No NAV found for this fund yet. Enter NAV manually or sync NAV data after saving.
         </p>
       );
     }
