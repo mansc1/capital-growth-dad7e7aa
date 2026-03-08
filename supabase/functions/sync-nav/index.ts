@@ -242,6 +242,12 @@ Deno.serve(async (req) => {
               .eq("id", existing.id);
             if (updateErr) throw updateErr;
             updatedRows++;
+            try {
+              const wb = await writeBackPendingTransactions(supabase, fund.id, navResult.navDate, navResult.navPerUnit);
+              if (wb > 0) console.log(`[write-back] Updated ${wb} transaction(s) for fund=${fund.id} date=${navResult.navDate}`);
+            } catch (wbErr) {
+              console.warn(`[write-back] Failed for fund=${fund.id} date=${navResult.navDate}:`, (wbErr as Error).message);
+            }
           }
         } else {
           const { error: insertErr } = await supabase
