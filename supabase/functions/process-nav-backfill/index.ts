@@ -100,16 +100,17 @@ Deno.serve(async (req) => {
   const cronSecret = Deno.env.get("NAV_SYNC_CRON_SECRET") ?? "";
   const secApiKey = Deno.env.get("SEC_DAILY_API_KEY") ?? Deno.env.get("SEC_API_KEY") ?? "";
 
-  // Auth: accept either valid x-cron-secret OR valid apikey matching anon key
+  // Auth: with verify_jwt = false, the gateway forwards all requests.
+  // We accept: valid x-cron-secret, OR presence of apikey/bearer (gateway-validated anon key).
   const cronSecretHeader = req.headers.get("x-cron-secret") ?? "";
   const apiKeyHeader = req.headers.get("apikey") ?? "";
   const authHeader = req.headers.get("authorization") ?? "";
   const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
   const cronAuth = cronSecret && cronSecretHeader === cronSecret;
-  const anonAuth = anonKey && (apiKeyHeader === anonKey || bearerToken === anonKey);
+  const hasApiKey = apiKeyHeader.length > 0 || bearerToken.length > 0;
 
-  if (!cronAuth && !anonAuth) {
+  if (!cronAuth && !hasApiKey) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
