@@ -148,6 +148,8 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+
+        <NavHealthDashboard />
       </div>
     </AppLayout>
   );
