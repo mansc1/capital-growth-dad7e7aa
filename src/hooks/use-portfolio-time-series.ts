@@ -63,6 +63,7 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
       const result: PortfolioSnapshot[] = [];
 
       for (const date of allDates) {
+        let dayNetFlow = 0;
         // Apply transactions for this date
         const dayTxs = txByDate.get(date);
         if (dayTxs) {
@@ -76,6 +77,7 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
             if (type === 'buy' || type === 'switch_in') {
               state.units += tx.units;
               state.cost += tx.amount + tx.fee;
+              dayNetFlow += tx.amount;
             } else if (type === 'sell' || type === 'switch_out') {
               if (state.units > 0) {
                 const preUnits = state.units;
@@ -87,12 +89,14 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
                 state.units = 0;
                 state.cost = 0;
               }
+              dayNetFlow -= tx.amount;
             } else if (type === 'dividend') {
               if (tx.dividend_type === 'reinvest') {
                 state.units += tx.units;
                 state.cost += tx.amount;
+                dayNetFlow += tx.amount;
               }
-              // cash: no-op
+              // cash: no-op (no portfolio value change, no flow)
             }
           }
         }
@@ -146,6 +150,7 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
           total_return_percent: totalReturnPercent,
           latest_nav_date: latestActualNavDate,
           created_at: date,
+          net_flow: dayNetFlow,
         });
       }
 

@@ -36,7 +36,8 @@ export function computePortfolioTWR(
     const prevValue = Number(filtered[i - 1].total_value);
     const currValue = Number(filtered[i].total_value);
     if (prevValue > 0) {
-      const dailyReturn = currValue / prevValue - 1;
+      const flow = filtered[i].net_flow ?? 0;
+      const dailyReturn = (currValue - flow - prevValue) / prevValue;
       product *= 1 + dailyReturn;
     }
   }
@@ -139,7 +140,8 @@ export function computeDailyReturns(
     const prevValue = Number(sorted[i - 1].total_value);
     const currValue = Number(sorted[i].total_value);
     if (prevValue > 0) {
-      map.set(sorted[i].snapshot_date, ((currValue / prevValue) - 1) * 100);
+      const flow = sorted[i].net_flow ?? 0;
+      map.set(sorted[i].snapshot_date, ((currValue - flow - prevValue) / prevValue) * 100);
     }
   }
 
@@ -178,7 +180,8 @@ export function computePortfolioTWRSeries(
   for (let i = 1; i < sorted.length; i++) {
     const prevValue = Number(sorted[i - 1].total_value);
     const currValue = Number(sorted[i].total_value);
-    const dailyReturn = prevValue > 0 ? currValue / prevValue - 1 : 0;
+    const flow = sorted[i].net_flow ?? 0;
+    const dailyReturn = prevValue > 0 ? (currValue - flow - prevValue) / prevValue : 0;
     product *= 1 + dailyReturn;
     result.push({
       date: sorted[i].snapshot_date,
