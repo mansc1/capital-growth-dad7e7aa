@@ -36,7 +36,8 @@ const baseSchema = z.object({
   trade_date: z.string().min(1, "Required"),
   units: z.number().min(0.0001, "Must be positive"),
   amount: z.number().min(0, "Must be non-negative"),
-  nav_at_trade: z.number().min(0.0001, "Must be positive"),
+  // 0 = pending historical NAV backfill placeholder, not a real NAV value
+  nav_at_trade: z.number().min(0),
   fee: z.number().min(0, "Cannot be negative"),
   note: z.string().optional(),
   dividend_type: z.enum(["cash", "reinvest"]).nullable().optional(),
@@ -317,7 +318,9 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         result = await createMutation.mutateAsync(payload);
       }
       if (result?.backfillEnqueued) {
-        toast.info("Transaction saved. Historical NAV is being fetched in the background.");
+        toast.success("Transaction saved. Historical NAV is being updated in the background.");
+      } else {
+        toast.success(editTransaction ? "Transaction updated." : "Transaction saved.");
       }
       resetPendingState();
       onClose();
@@ -361,9 +364,9 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     if (!navLoading && nav === null && navFundId && watchDate) {
       return (
         <p className="text-xs text-muted-foreground">
-          {isBuyType || isSellType
-            ? "No NAV found for this fund. Enter NAV manually or sync NAV data first."
-            : "No NAV found for this date. Enter NAV manually."}
+          {editTransaction
+            ? "NAV for this date is not available yet. Saving will trigger an automatic historical NAV update."
+            : "No NAV found for this date. Save the transaction and historical NAV will be fetched automatically."}
         </p>
       );
     }
@@ -371,7 +374,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     if (pendingSecFund && !resolvedFundId && !isResolving) {
       return (
         <p className="text-xs text-muted-foreground">
-          No NAV found for this fund yet. Enter NAV manually or sync NAV data after saving.
+          No NAV found for this date. Save the transaction and historical NAV will be fetched automatically.
         </p>
       );
     }

@@ -1,36 +1,36 @@
 
 
-# Fix Transaction NAV UX — Implementation Plan
+# Manage Funds — Final Implementation Plan
 
-## Verification Complete
+## Adjustment: sync-nav fund identity
 
-`nav_at_trade` is only displayed in two read-only table views (`Transactions.tsx:97`, `FundDetail.tsx:222`) as `formatNumber()`. It is **never** used in holdings calculations, portfolio snapshots, or return analytics — those all use `nav_history` lookups. The zero placeholder is safe and isolated.
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
 
-## Changes — Single file: `src/components/transactions/TransactionDrawer.tsx`
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
 
-### 1. Schema (line 39)
-`nav_at_trade: z.number().min(0.0001, "Must be positive")` → `z.number().min(0)`
-Add comment: `// 0 = pending historical NAV backfill placeholder, not a real NAV value`
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
 
-### 2. Helper text — `renderNavHelper()` (lines 360-377)
+## Everything else — unchanged from approved plan
 
-**Existing fund, no nav (lines 361-368):**
-- Create mode: `"No NAV found for this date. Save the transaction and historical NAV will be fetched automatically."`
-- Edit mode: `"NAV for this date is not available yet. Saving will trigger an automatic historical NAV update."`
-
-**Pending SEC fund, no resolved ID (lines 370-376):**
-→ `"No NAV found for this date. Save the transaction and historical NAV will be fetched automatically."`
-
-### 3. Post-save toast (lines 319-323)
-Replace current block with:
-```ts
-if (result?.backfillEnqueued) {
-  toast.success("Transaction saved. Historical NAV is being updated in the background.");
-} else {
-  toast.success(editTransaction ? "Transaction updated." : "Transaction saved.");
-}
+### Migration
+```sql
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
 ```
-Always shows a toast. Background-update variant when backfill is enqueued.
 
-### No other files changed
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 
