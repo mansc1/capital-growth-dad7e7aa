@@ -36,7 +36,8 @@ const baseSchema = z.object({
   trade_date: z.string().min(1, "Required"),
   units: z.number().min(0.0001, "Must be positive"),
   amount: z.number().min(0, "Must be non-negative"),
-  nav_at_trade: z.number().min(0.0001, "Must be positive"),
+  // 0 = pending historical NAV backfill placeholder, not a real NAV value
+  nav_at_trade: z.number().min(0),
   fee: z.number().min(0, "Cannot be negative"),
   note: z.string().optional(),
   dividend_type: z.enum(["cash", "reinvest"]).nullable().optional(),
