@@ -318,7 +318,9 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         result = await createMutation.mutateAsync(payload);
       }
       if (result?.backfillEnqueued) {
-        toast.info("Transaction saved. Historical NAV is being fetched in the background.");
+        toast.success("Transaction saved. Historical NAV is being updated in the background.");
+      } else {
+        toast.success(editTransaction ? "Transaction updated." : "Transaction saved.");
       }
       resetPendingState();
       onClose();
