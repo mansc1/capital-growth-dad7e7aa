@@ -7,16 +7,21 @@ export function useHoldings(includeZero = false) {
   return useQuery({
     queryKey: ['holdings', includeZero],
     queryFn: async () => {
-      // Fetch funds, transactions, and latest NAVs in parallel
-      const [fundsRes, txRes, navRes] = await Promise.all([
+      // Fetch funds, transactions, latest NAVs, and active backfill jobs in parallel
+      const [fundsRes, txRes, navRes, backfillRes] = await Promise.all([
         supabase.from('funds').select('*').order('fund_code'),
         supabase.from('transactions').select('*').order('trade_date'),
         supabase.from('nav_history').select('fund_id, nav_per_unit, nav_date').order('fund_id').order('nav_date', { ascending: false }),
+        supabase.from('nav_backfill_queue').select('fund_id').in('status', ['pending', 'processing']),
       ]);
 
       if (fundsRes.error) throw fundsRes.error;
       if (txRes.error) throw txRes.error;
       if (navRes.error) throw navRes.error;
+      // backfill query is best-effort
+      const activeBackfillFundIds = new Set<string>(
+        (backfillRes.data || []).map((r) => r.fund_id)
+      );
 
       const latestNavs: Record<string, { nav_per_unit: number; nav_date: string }> = {};
       for (const row of navRes.data || []) {
@@ -32,7 +37,7 @@ export function useHoldings(includeZero = false) {
         fee: Number(t.fee),
       }));
 
-      return computeHoldings(fundsRes.data as Fund[], transactions, latestNavs, includeZero);
+      return computeHoldings(fundsRes.data as Fund[], transactions, latestNavs, includeZero, activeBackfillFundIds);
     },
   });
 }
