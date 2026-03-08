@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePortfolioSnapshots } from "@/hooks/use-portfolio-snapshots";
+import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { useHoldings } from "@/hooks/use-holdings";
 import { useAllNavHistory } from "@/hooks/use-all-nav-history";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
