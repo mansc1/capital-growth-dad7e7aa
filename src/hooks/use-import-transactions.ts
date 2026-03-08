@@ -67,8 +67,8 @@ export function useImportTransactions() {
           warnings.push(secFetchError);
         } else {
           // Build SEC lookup map
-          const secByAbbr = new Map<string, typeof secEntries[0]>();
-          for (const entry of secEntries ?? []) {
+          const secByAbbr = new Map<string, typeof allSecEntries[0]>();
+          for (const entry of allSecEntries) {
             secByAbbr.set(NORM(entry.proj_abbr_name), entry);
           }
 
