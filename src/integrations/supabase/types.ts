@@ -59,6 +59,53 @@ export type Database = {
         }
         Relationships: []
       }
+      nav_backfill_queue: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          fund_id: string
+          id: string
+          last_error: string | null
+          reason: string
+          requested_end_date: string
+          requested_start_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          fund_id: string
+          id?: string
+          last_error?: string | null
+          reason?: string
+          requested_end_date: string
+          requested_start_date: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          fund_id?: string
+          id?: string
+          last_error?: string | null
+          reason?: string
+          requested_end_date?: string
+          requested_start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nav_backfill_queue_fund_id_fkey"
+            columns: ["fund_id"]
+            isOneToOne: false
+            referencedRelation: "funds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nav_history: {
         Row: {
           fetched_at: string | null

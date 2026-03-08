@@ -310,10 +310,14 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     };
 
     try {
+      let result;
       if (editTransaction) {
-        await updateMutation.mutateAsync({ id: editTransaction.id, ...payload });
+        result = await updateMutation.mutateAsync({ id: editTransaction.id, ...payload });
       } else {
-        await createMutation.mutateAsync(payload);
+        result = await createMutation.mutateAsync(payload);
+      }
+      if (result?.backfillEnqueued) {
+        toast.info("Transaction saved. Historical NAV is being fetched in the background.");
       }
       resetPendingState();
       onClose();

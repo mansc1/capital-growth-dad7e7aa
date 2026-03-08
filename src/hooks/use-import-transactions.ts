@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { checkAndEnqueueBackfill } from '@/hooks/use-check-nav-coverage';
 import type { ValidatedRow } from '@/lib/csv/validate-row';
 
 const NORM = (s: string | null | undefined): string => s?.trim().toUpperCase() ?? '';
@@ -109,9 +110,10 @@ export function useImportTransactions() {
         }
       }
 
-      // 3. Build insert objects
+      // 3. Build insert objects + track fund/date pairs for backfill
       const insertRows: Array<Record<string, unknown>> = [];
       let skippedNoFund = 0;
+      const fundDatePairs = new Map<string, string>(); // fundId → min trade_date
 
       for (const r of rows) {
         if (!r.parsed) continue;
@@ -120,6 +122,14 @@ export function useImportTransactions() {
         if (!fundId) {
           skippedNoFund++;
           continue;
+        }
+
+        const tradeDate = r.parsed.trade_date.substring(0, 10);
+
+        // Track minimum trade_date per fund for backfill
+        const existing = fundDatePairs.get(fundId);
+        if (!existing || tradeDate < existing) {
+          fundDatePairs.set(fundId, tradeDate);
         }
 
         const obj: Record<string, unknown> = {
@@ -160,7 +170,23 @@ export function useImportTransactions() {
         }
       }
 
-      // 5. Cache invalidation
+      // 5. Backfill check for imported funds
+      if (imported > 0) {
+        let backfillCount = 0;
+        for (const [fundId, minDate] of fundDatePairs) {
+          try {
+            const enqueued = await checkAndEnqueueBackfill(fundId, minDate);
+            if (enqueued) backfillCount++;
+          } catch {
+            // Non-critical — don't fail the import
+          }
+        }
+        if (backfillCount > 0) {
+          warnings.push(`${backfillCount} fund(s) queued for historical NAV backfill.`);
+        }
+      }
+
+      // 6. Cache invalidation
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['transactions'] }),
         qc.invalidateQueries({ queryKey: ['funds'] }),
