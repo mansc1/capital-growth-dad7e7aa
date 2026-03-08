@@ -56,6 +56,8 @@ export interface PortfolioSnapshot {
   total_return_percent: number;
   latest_nav_date: string | null;
   created_at: string;
+  /** Net external cash flow on this snapshot date only (buys/switch_in/reinvest minus sells/switch_out). Not carried forward. */
+  net_flow?: number;
 }
 
 // Computed types

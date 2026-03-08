@@ -149,6 +149,7 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
           total_return_percent: totalReturnPercent,
           latest_nav_date: latestActualNavDate,
           created_at: date,
+          net_flow: dayNetFlow,
         });
       }
 

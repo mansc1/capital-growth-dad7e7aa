@@ -180,7 +180,8 @@ export function computePortfolioTWRSeries(
   for (let i = 1; i < sorted.length; i++) {
     const prevValue = Number(sorted[i - 1].total_value);
     const currValue = Number(sorted[i].total_value);
-    const dailyReturn = prevValue > 0 ? currValue / prevValue - 1 : 0;
+    const flow = sorted[i].net_flow ?? 0;
+    const dailyReturn = prevValue > 0 ? (currValue - flow - prevValue) / prevValue : 0;
     product *= 1 + dailyReturn;
     result.push({
       date: sorted[i].snapshot_date,
