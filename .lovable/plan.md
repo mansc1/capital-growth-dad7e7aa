@@ -1,36 +1,104 @@
 
 
-# Manage Funds — Final Implementation Plan
+# Smart Automatic NAV Backfill — Implementation
 
-## Adjustment: sync-nav fund identity
+## 1. Database Migration
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+Create `nav_backfill_queue` table with partial unique index:
 
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
-
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
-
-## Everything else — unchanged from approved plan
-
-### Migration
 ```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+CREATE TABLE public.nav_backfill_queue (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  fund_id uuid NOT NULL REFERENCES public.funds(id) ON DELETE CASCADE,
+  requested_start_date date NOT NULL,
+  requested_end_date date NOT NULL,
+  reason text NOT NULL DEFAULT 'transaction_save',
+  status text NOT NULL DEFAULT 'pending',
+  dedupe_key text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  last_error text
+);
+
+CREATE UNIQUE INDEX uq_backfill_active_dedupe
+  ON public.nav_backfill_queue (dedupe_key)
+  WHERE status IN ('pending', 'processing');
+
+ALTER TABLE public.nav_backfill_queue ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read" ON public.nav_backfill_queue FOR SELECT USING (true);
+CREATE POLICY "Public write" ON public.nav_backfill_queue FOR ALL USING (true) WITH CHECK (true);
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.nav_backfill_queue
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+## 2. New Files
 
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+### `src/hooks/use-check-nav-coverage.ts`
+- Exports `checkAndEnqueueBackfill(fundId: string, tradeDate: string): Promise<boolean>`
+- Normalizes tradeDate to `YYYY-MM-DD` via `.substring(0, 10)`
+- Queries `nav_history` for `fund_id = fundId AND nav_date <= tradeDate`, limit 1
+- If coverage exists → return false
+- If no coverage → insert into `nav_backfill_queue` with `dedupe_key = {fundId}:{normalizedDate}:{today}`, catch unique violation silently
+- Fire-and-forget `supabase.functions.invoke('process-nav-backfill')` (no await on result)
+- Return true
+
+### `supabase/functions/process-nav-backfill/index.ts`
+- Auth: accepts **either** valid `x-cron-secret` header **or** valid `apikey` header matching the actual anon key (`Deno.env.get('SUPABASE_ANON_KEY')`)
+- CORS headers included
+- Claims pending jobs: SELECT pending rows (limit 10, ordered by created_at), then for each: `UPDATE SET status = 'processing' WHERE id = X AND status = 'pending'` — the `AND status = 'pending'` guard prevents double-claiming
+- For each claimed job: resolve `proj_id` from `sec_fund_directory`, fetch SEC API date-by-date (reuse same fetchWithRetry/throttle/parseDailyNavResponse logic from `backfill-nav`), upsert `nav_history`, mark `completed` or `failed`
+- Track actual rows inserted/updated; only rebuild portfolio snapshot if data changed
+- Return JSON summary
+
+### `src/hooks/use-backfill-status.ts`
+- `useQuery` with key `['backfill_queue_status']`
+- `refetchInterval` callback: returns 5000 when `activeCount > 0`, `false` when 0
+- Queries count of `nav_backfill_queue` where `status IN ('pending', 'processing')`
+- Uses a `useRef` to track previous count; when transitioning from >0 to 0, invalidates `portfolio_time_series`, `nav_history`, `all_nav_history`, `holdings` queries
+- Returns `{ activeCount, isLoading }`
+
+## 3. Modified Files
+
+### `supabase/config.toml`
+Add:
+```toml
+[functions.process-nav-backfill]
+verify_jwt = false
+```
+
+### `src/hooks/use-transactions.ts`
+- Modify `useCreateTransaction` and `useUpdateTransaction` `mutationFn` to return `{ data, backfillEnqueued }` — after successful Supabase operation, call `checkAndEnqueueBackfill(data.fund_id, data.trade_date)` and capture the boolean result
+- `onSuccess` unchanged
+
+### `src/components/transactions/TransactionDrawer.tsx`
+- After successful `createMutation.mutateAsync` or `updateMutation.mutateAsync`, check `result.backfillEnqueued`
+- If true: `toast.info("Transaction saved. Historical NAV is being fetched in the background.")`
+
+### `src/hooks/use-import-transactions.ts`
+- After batch insert (step 4), collect unique `(fund_id, min_trade_date)` pairs from inserted rows
+- Call `checkAndEnqueueBackfill` for each pair
+- Add count of enqueued backfills to result warnings
+
+### `src/hooks/use-nav-backfill.ts`
+- Refactor `backfillNav()` to:
+  1. Query all funds with transactions, find earliest trade_date per fund
+  2. Call `checkAndEnqueueBackfill(fundId, earliestTradeDate)` for each
+  3. Await `supabase.functions.invoke('process-nav-backfill')` (manual path waits)
+  4. Invalidate queries on completion
+  5. Return simplified result
+
+### `src/pages/Settings.tsx`
+- Import `useBackfillStatus`
+- Show "Updating NAV history..." text + spinner near backfill button when `activeCount > 0`
+- Disable backfill button when `activeCount > 0`
+
+## Key Design Decisions
+
+- **Auth consistency**: Processor validates `apikey` header value against actual `SUPABASE_ANON_KEY` env var, not just header presence. Accepts either that or valid `x-cron-secret`.
+- **Date normalization**: `.substring(0, 10)` on all trade dates before coverage check and dedupe_key.
+- **Range**: Transaction-save jobs: `tradeDate → today`. Manual: `earliestTxDate → today` per fund.
+- **Polling cleanup**: `refetchInterval` callback returns `false` when idle. Transition-based invalidation via `useRef` prevents refetch noise.
+- **Single gap-detection rule**: `checkAndEnqueueBackfill` is the only function used by all three paths (save, import, manual).
+- **Backfill button guard**: Disabled when active queue jobs exist.
 
