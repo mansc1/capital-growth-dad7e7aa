@@ -58,6 +58,8 @@ export interface PortfolioSnapshot {
   created_at: string;
   /** Net external cash flow on this snapshot date only (buys/switch_in/reinvest minus sells/switch_out). Not carried forward. */
   net_flow?: number;
+  has_transaction?: boolean;
+  tx_count?: number;
 }
 
 // Computed types

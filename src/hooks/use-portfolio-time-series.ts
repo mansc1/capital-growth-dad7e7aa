@@ -165,6 +165,8 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
           latest_nav_date: latestActualNavDate,
           created_at: date,
           net_flow: dayNetFlow,
+          has_transaction: !!dayTxs,
+          tx_count: dayTxs ? dayTxs.length : 0,
         });
       }
 
