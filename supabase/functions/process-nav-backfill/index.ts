@@ -150,18 +150,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Load SEC directory for proj_id resolution
-    const { data: dirEntries, error: dirErr } = await supabase
-      .from("sec_fund_directory")
-      .select("proj_id, proj_abbr_name");
-    if (dirErr) throw new Error(`Failed to query sec_fund_directory: ${dirErr.message}`);
-
-    const projIdMap = new Map<string, string>();
-    for (const entry of dirEntries ?? []) {
-      if (entry.proj_abbr_name && entry.proj_id) {
-        projIdMap.set(NORM(entry.proj_abbr_name), entry.proj_id);
-      }
-    }
+    // 2. Load SEC directory for proj_id resolution (paginated — table has 14k+ rows)
+    const projIdMap = await loadFullSecDirectory(supabase, "process-backfill");
 
     // 3. Process each job
     for (const job of pendingJobs) {
