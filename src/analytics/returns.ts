@@ -36,7 +36,8 @@ export function computePortfolioTWR(
     const prevValue = Number(filtered[i - 1].total_value);
     const currValue = Number(filtered[i].total_value);
     if (prevValue > 0) {
-      const dailyReturn = currValue / prevValue - 1;
+      const flow = filtered[i].net_flow ?? 0;
+      const dailyReturn = (currValue - flow - prevValue) / prevValue;
       product *= 1 + dailyReturn;
     }
   }
