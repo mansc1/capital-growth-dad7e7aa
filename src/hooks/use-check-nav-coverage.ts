@@ -32,6 +32,22 @@ export async function checkAndEnqueueBackfill(
     return false;
   }
 
+  // Skip re-enqueue if a failed job for this fund already exists from today.
+  // This prevents queue pollution from repeated failures hitting the same root cause.
+  // After the underlying fix is deployed, tomorrow's transactions will re-enqueue normally.
+  const todayStart = `${today}T00:00:00Z`;
+  const { data: recentFailed } = await supabase
+    .from("nav_backfill_queue")
+    .select("id")
+    .eq("fund_id", fundId)
+    .eq("status", "failed")
+    .gte("updated_at", todayStart)
+    .limit(1);
+
+  if (recentFailed && recentFailed.length > 0) {
+    return false;
+  }
+
   // No coverage — enqueue backfill job
   const dedupeKey = `${fundId}:${normalizedDate}:${today}`;
 
