@@ -1,10 +1,46 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, XCircle, Clock, Loader2, AlertCircle } from "lucide-react";
-import { useNavHealth } from "@/hooks/use-nav-health";
+import { CheckCircle2, XCircle, Clock, Loader2, RefreshCw } from "lucide-react";
+import { useNavHealth, type NavHealthSummary } from "@/hooks/use-nav-health";
+import { useUpdateNavData } from "@/hooks/use-update-nav-data";
+import { toast } from "sonner";
 
-function formatProvider(provider: string | null): string {
+// --- Health banner logic (kept together for maintainability) ---
+
+type HealthStatus = "healthy" | "warning" | "error";
+
+function computeHealthStatus(data: NavHealthSummary): HealthStatus {
+  if (data.failedJobs > 0 || data.navUnavailableFunds > 0) return "error";
+  if (data.waitingForNavFunds > 0 || data.staleFunds > 0) return "warning";
+  return "healthy";
+}
+
+const STATUS_CONFIG: Record<HealthStatus, { bg: string; dot: string; text: string; label: string }> = {
+  healthy: {
+    bg: "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800",
+    dot: "bg-green-500",
+    text: "text-green-700 dark:text-green-400",
+    label: "All NAV systems healthy",
+  },
+  warning: {
+    bg: "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-800",
+    dot: "bg-yellow-500",
+    text: "text-yellow-700 dark:text-yellow-400",
+    label: "Attention needed",
+  },
+  error: {
+    bg: "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800",
+    dot: "bg-red-500",
+    text: "text-red-700 dark:text-red-400",
+    label: "Issues detected",
+  },
+};
+
+// --- Helpers ---
+
+function formatProvider(provider: string | null | undefined): string {
   if (!provider) return "Unknown";
   if (provider === "sec") return "SEC Thailand";
   if (provider === "mock") return "Mock";
@@ -39,20 +75,49 @@ function SyncStatusBadge({ status }: { status: string | null }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="min-h-[280px] grid grid-cols-2 sm:grid-cols-3 gap-4">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="space-y-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-5 w-16" />
-          <Skeleton className="h-4 w-20" />
-        </div>
-      ))}
+    <div className="min-h-[320px] space-y-5">
+      <Skeleton className="h-10 w-full" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="h-9 w-40" />
     </div>
   );
 }
 
+// --- Main component ---
+
 export function NavHealthDashboard() {
   const { data, isLoading } = useNavHealth();
+  const { updateNavData, isLoading: updating } = useUpdateNavData();
+
+  const handleUpdateNavData = async () => {
+    const result = await updateNavData();
+
+    if (!result) {
+      toast.error("NAV update failed. Check your connection and try again.");
+      return;
+    }
+
+    if (!result.success) {
+      toast.error(`NAV update failed: ${result.message}`);
+    } else if (result?.backfillJobsEnqueued > 0) {
+      toast.success("NAV data updated. Historical NAV is being updated in the background.");
+    } else {
+      toast.success("NAV data updated successfully.");
+    }
+
+    if ((result?.warnings?.length ?? 0) > 0) {
+      console.warn("[update-nav-data] warnings:", result.warnings);
+      toast.warning(`Completed with ${result.warnings.length} warning(s).`);
+    }
+  };
 
   return (
     <Card>
@@ -62,12 +127,25 @@ export function NavHealthDashboard() {
           Monitor NAV coverage, freshness, backfill activity, and data pipeline health across your portfolio.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         {isLoading || !data ? (
           <LoadingSkeleton />
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+            {/* Health status banner */}
+            {(() => {
+              const status = computeHealthStatus(data);
+              const cfg = STATUS_CONFIG[status];
+              return (
+                <div className={`flex items-center gap-2.5 rounded-md border px-4 py-2.5 ${cfg.bg}`}>
+                  <span className={`h-2 w-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                  <span className={`text-sm font-medium ${cfg.text}`}>{cfg.label}</span>
+                </div>
+              );
+            })()}
+
+            {/* Metrics grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 text-sm">
               {/* Coverage */}
               <div>
                 <p className="text-muted-foreground text-xs mb-1">Coverage</p>
@@ -94,7 +172,7 @@ export function NavHealthDashboard() {
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {data.staleFunds > 0
                     ? `${data.staleFunds} stale`
-                    : "All current"}
+                    : "Up to date"}
                 </p>
               </div>
 
@@ -131,9 +209,9 @@ export function NavHealthDashboard() {
                 </p>
               </div>
 
-              {/* Directory */}
+              {/* SEC Directory */}
               <div>
-                <p className="text-muted-foreground text-xs mb-1">Fund Directory</p>
+                <p className="text-muted-foreground text-xs mb-1">SEC Directory</p>
                 <p className="font-medium">
                   {data.directoryCount.toLocaleString()} funds indexed
                 </p>
@@ -174,7 +252,7 @@ export function NavHealthDashboard() {
               </div>
             </div>
 
-            {/* Inline backfill indicator */}
+            {/* Background job indicator */}
             {data.pendingJobs + data.processingJobs > 0 && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -184,6 +262,14 @@ export function NavHealthDashboard() {
                 </span>
               </div>
             )}
+
+            {/* Update button */}
+            <div className="pt-1">
+              <Button onClick={handleUpdateNavData} disabled={updating} size="sm">
+                <RefreshCw className={`h-4 w-4 mr-2 ${updating ? "animate-spin" : ""}`} />
+                {updating ? "Updating…" : "Update NAV Data"}
+              </Button>
+            </div>
           </>
         )}
       </CardContent>
