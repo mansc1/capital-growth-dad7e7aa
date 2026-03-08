@@ -8,6 +8,7 @@ import { RefreshCw, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
 import { useBackfillStatus } from "@/hooks/use-backfill-status";
 import { useUpdateNavData } from "@/hooks/use-update-nav-data";
+import { NavHealthDashboard } from "@/components/settings/NavHealthDashboard";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
