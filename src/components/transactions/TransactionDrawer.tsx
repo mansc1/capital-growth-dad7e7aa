@@ -508,8 +508,11 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
                       type="number"
                       step="0.0001"
                       {...field}
+                      value={field.value === 0 ? "" : field.value}
                       onChange={(e) => {
-                        field.onChange(Number(e.target.value));
+                        const raw = e.target.value;
+                        const num = raw === "" ? 0 : Number(raw);
+                        field.onChange(Number.isNaN(num) ? 0 : num);
                         setNavManuallyEdited(true);
                         navWasAutoFilled.current = false;
                       }}
