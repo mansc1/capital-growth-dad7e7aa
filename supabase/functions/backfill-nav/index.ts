@@ -407,7 +407,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 7. Update sync_runs
+    // 7. Rebuild portfolio snapshots if any NAV data changed
+    if (result.rowsInserted > 0 || result.rowsUpdated > 0) {
+      try {
+        await rebuildPortfolioSnapshotsForToday(supabase);
+      } catch (err) {
+        const msg = `Snapshot rebuild failed: ${(err as Error).message}`;
+        console.error(`[backfill] ${msg}`);
+        result.apiErrors.push(msg);
+      }
+    }
+
+    // 8. Update sync_runs
     const hasErrors = result.apiErrors.length > 0 || result.unresolvedFunds.length > 0;
     await supabase
       .from("sync_runs")
