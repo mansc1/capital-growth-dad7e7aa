@@ -133,27 +133,8 @@ Deno.serve(async (req) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const cronSecret = Deno.env.get("NAV_SYNC_CRON_SECRET") ?? "";
 
-  // Auth: validate apikey header OR Authorization bearer token
-  const apiKeyHeader = req.headers.get("apikey") ?? "";
-  const authHeader = req.headers.get("authorization") ?? "";
-  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-
-  console.log("[update-nav-data] Auth debug:", {
-    hasAnonKey: !!anonKey,
-    anonKeyPrefix: anonKey?.substring(0, 20),
-    apiKeyHeaderPrefix: apiKeyHeader?.substring(0, 20),
-    bearerTokenPrefix: bearerToken?.substring(0, 20),
-    apiKeyMatch: apiKeyHeader === anonKey,
-    bearerMatch: bearerToken === anonKey,
-  });
-
-  const isAuthorized = (!!apiKeyHeader && apiKeyHeader === anonKey) || (!!bearerToken && bearerToken === anonKey);
-  if (!anonKey || !isAuthorized) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  // No additional auth check — verify_jwt=false in config.toml,
+  // consistent with single-user app architecture.
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   const warnings: string[] = [];
