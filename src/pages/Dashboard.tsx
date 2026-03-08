@@ -19,8 +19,8 @@ import type { ChartRange } from "@/types/portfolio";
 
 export default function Dashboard() {
   const [chartRange, setChartRange] = useState<ChartRange>("ALL");
-  const { data: snapshots, isLoading: snapshotsLoading } = usePortfolioSnapshots(chartRange);
-  const { data: allSnapshots } = usePortfolioSnapshots("ALL");
+  const { data: snapshots, isLoading: snapshotsLoading } = usePortfolioTimeSeries(chartRange);
+  const { data: allSnapshots } = usePortfolioTimeSeries("ALL");
   const { data: holdings, isLoading: holdingsLoading } = useHoldings();
   const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange);
   const { lastSuccess } = useLastSuccessfulSync();
