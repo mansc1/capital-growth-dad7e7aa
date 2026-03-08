@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, CheckCircle2, XCircle, Clock, Database, History } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Database, History, Loader2 } from "lucide-react";
 import { useNavSync } from "@/hooks/use-nav-sync";
 import { useNavBackfill } from "@/hooks/use-nav-backfill";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
+import { useBackfillStatus } from "@/hooks/use-backfill-status";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -16,6 +17,7 @@ export default function SettingsPage() {
   const { syncNav, isLoading: syncing } = useNavSync();
   const { backfillNav, isLoading: backfilling } = useNavBackfill();
   const { lastSuccess, latestRun, isLoading: syncLoading } = useLastSuccessfulSync();
+  const { activeCount: backfillActiveCount } = useBackfillStatus();
   const [refreshingDirectory, setRefreshingDirectory] = useState(false);
 
   const handleRefreshDirectory = async () => {
@@ -57,30 +59,12 @@ export default function SettingsPage() {
       return;
     }
 
-    // Primary toast
-    if (result.fundsProcessed === 0 && result.unresolvedFunds.length === 0) {
+    if (result.fundsEnqueued === 0) {
       toast.info("All funds already have sufficient NAV coverage.");
-    } else if (result.fundsProcessed > 0) {
-      toast.success(
-        `Backfill complete: ${result.rowsInserted} inserted, ${result.rowsUpdated} updated across ${result.fundsProcessed} fund(s)`
-      );
     } else {
-      toast.error("Backfill failed — no funds could be processed.");
-    }
-
-    // Combined warning toast (at most one)
-    const warnings: string[] = [];
-    if (result.cappedFunds.length > 0) {
-      warnings.push(`${result.cappedFunds.length} fund(s) capped at 365 days`);
-    }
-    if (result.unresolvedFunds.length > 0) {
-      warnings.push(`${result.unresolvedFunds.length} fund(s) not in SEC directory`);
-    }
-    if (result.apiErrors.length > 0) {
-      warnings.push(`${result.apiErrors.length} API error(s)`);
-    }
-    if (warnings.length > 0) {
-      toast.warning(warnings.join(". "));
+      toast.success(
+        `Backfill queued for ${result.fundsEnqueued} fund(s). Processing in the background.`
+      );
     }
   };
 
@@ -97,6 +81,8 @@ export default function SettingsPage() {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
+
+  const backfillDisabled = backfilling || backfillActiveCount > 0;
 
   return (
     <AppLayout>
@@ -205,9 +191,17 @@ export default function SettingsPage() {
             <p className="text-sm text-muted-foreground">
               Fetch missing historical NAV data for funds with transactions older than existing coverage. This on-demand process queries dates individually and may take several minutes depending on the number of funds and date range.
             </p>
-            <Button onClick={handleBackfill} disabled={backfilling} size="sm">
+
+            {backfillActiveCount > 0 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Updating NAV history… ({backfillActiveCount} job{backfillActiveCount !== 1 ? "s" : ""} active)</span>
+              </div>
+            )}
+
+            <Button onClick={handleBackfill} disabled={backfillDisabled} size="sm">
               <History className={`h-4 w-4 mr-2 ${backfilling ? "animate-spin" : ""}`} />
-              {backfilling ? "Backfilling…" : "Backfill Historical NAV"}
+              {backfilling ? "Backfilling…" : backfillActiveCount > 0 ? "Backfill in Progress" : "Backfill Historical NAV"}
             </Button>
           </CardContent>
         </Card>
