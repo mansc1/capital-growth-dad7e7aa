@@ -36,8 +36,16 @@ const baseSchema = z.object({
   trade_date: z.string().min(1, "Required"),
   units: z.number().min(0.0001, "Must be positive"),
   amount: z.number().min(0, "Must be non-negative"),
-  // 0 = pending historical NAV backfill placeholder, not a real NAV value
-  nav_at_trade: z.number().min(0),
+  // 0 = pending historical NAV backfill placeholder, not a real NAV value.
+  // It satisfies the DB NOT NULL constraint while background backfill resolves the real NAV.
+  nav_at_trade: z.preprocess(
+    (val) => {
+      if (val === "" || val === null || val === undefined) return 0;
+      const num = Number(val);
+      return Number.isNaN(num) ? 0 : num;
+    },
+    z.number().min(0)
+  ),
   fee: z.number().min(0, "Cannot be negative"),
   note: z.string().optional(),
   dividend_type: z.enum(["cash", "reinvest"]).nullable().optional(),
@@ -158,8 +166,8 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         navWasAutoFilled.current = true;
       }
   } else {
-    // New lookup returned null — clear stale auto-filled or DB-loaded value
-    form.setValue("nav_at_trade", "" as any);
+    // No NAV available — use 0 as pending backfill placeholder and clear validation errors
+    form.setValue("nav_at_trade", 0);
     form.clearErrors("nav_at_trade");
     navWasAutoFilled.current = false;
   }
@@ -500,8 +508,11 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
                       type="number"
                       step="0.0001"
                       {...field}
+                      value={field.value === 0 ? "" : field.value}
                       onChange={(e) => {
-                        field.onChange(Number(e.target.value));
+                        const raw = e.target.value;
+                        const num = raw === "" ? 0 : Number(raw);
+                        field.onChange(Number.isNaN(num) ? 0 : num);
                         setNavManuallyEdited(true);
                         navWasAutoFilled.current = false;
                       }}
