@@ -362,9 +362,9 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     if (!navLoading && nav === null && navFundId && watchDate) {
       return (
         <p className="text-xs text-muted-foreground">
-          {isBuyType || isSellType
-            ? "No NAV found for this fund. Enter NAV manually or sync NAV data first."
-            : "No NAV found for this date. Enter NAV manually."}
+          {editTransaction
+            ? "NAV for this date is not available yet. Saving will trigger an automatic historical NAV update."
+            : "No NAV found for this date. Save the transaction and historical NAV will be fetched automatically."}
         </p>
       );
     }
@@ -372,7 +372,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     if (pendingSecFund && !resolvedFundId && !isResolving) {
       return (
         <p className="text-xs text-muted-foreground">
-          No NAV found for this fund yet. Enter NAV manually or sync NAV data after saving.
+          No NAV found for this date. Save the transaction and historical NAV will be fetched automatically.
         </p>
       );
     }
