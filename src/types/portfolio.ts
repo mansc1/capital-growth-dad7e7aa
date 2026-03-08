@@ -59,6 +59,8 @@ export interface PortfolioSnapshot {
 }
 
 // Computed types
+export type ValuationStatus = 'ready' | 'waiting_for_nav' | 'nav_unavailable';
+
 export interface Holding {
   fund: Fund;
   total_units: number;
@@ -69,6 +71,7 @@ export interface Holding {
   gain_loss: number;
   return_pct: number;
   allocation_pct: number;
+  valuation_status: ValuationStatus;
 }
 
 export interface PerformanceReturn {

@@ -13,6 +13,7 @@ interface TxRow {
 /**
  * Rebuild today's portfolio snapshot using average cost method.
  * Mirrors the logic in src/lib/holdings.ts exactly.
+ * Missing NAV → fall back to cost basis instead of skipping the fund.
  */
 export async function rebuildPortfolioSnapshotsForToday(
   supabase: SupabaseClient
@@ -93,14 +94,20 @@ export async function rebuildPortfolioSnapshotsForToday(
       .limit(1);
 
     const nav = navRows?.[0];
-    if (!nav) continue;
-
     const holding = holdingData[fundId];
-    totalValue += holding.totalUnits * nav.nav_per_unit;
-    totalCost += holding.totalCost;
 
-    if (!latestNavDate || nav.nav_date > latestNavDate) {
-      latestNavDate = nav.nav_date;
+    if (nav) {
+      // NAV available — use real market value
+      totalValue += holding.totalUnits * nav.nav_per_unit;
+      totalCost += holding.totalCost;
+
+      if (!latestNavDate || nav.nav_date > latestNavDate) {
+        latestNavDate = nav.nav_date;
+      }
+    } else {
+      // Missing NAV — fall back to cost basis
+      totalValue += holding.totalCost;
+      totalCost += holding.totalCost;
     }
   }
 

@@ -1,4 +1,4 @@
-import type { Transaction, Fund, Holding } from '@/types/portfolio';
+import type { Transaction, Fund, Holding, ValuationStatus } from '@/types/portfolio';
 
 /**
  * Compute holdings using Average Cost Method.
@@ -7,12 +7,16 @@ import type { Transaction, Fund, Holding } from '@/types/portfolio';
  * - Dividend (cash): no unit/cost change
  * - Dividend (reinvest): total_units += units, total_cost += amount
  * - When total_units reaches zero: reset avg_cost and total_cost to 0
+ *
+ * Missing NAV rule: if a fund has units but no NAV data, market_value falls back
+ * to cost basis (gain_loss = 0, return_pct = 0) instead of using NAV = 0.
  */
 export function computeHoldings(
   funds: Fund[],
   transactions: { fund_id: string; tx_type: string; units: number; amount: number; fee: number; dividend_type: string | null; trade_date: string }[],
   latestNavs: Record<string, { nav_per_unit: number; nav_date: string }>,
-  includeZero = false
+  includeZero = false,
+  activeBackfillFundIds: Set<string> = new Set(),
 ): Holding[] {
   // Group transactions by fund, sorted chronologically
   const txByFund: Record<string, typeof transactions> = {};
@@ -30,7 +34,7 @@ export function computeHoldings(
   let totalMarketValue = 0;
 
   // First pass: compute units and costs
-  const fundData: { fund: Fund; total_units: number; total_cost: number; latest_nav: number }[] = [];
+  const fundData: { fund: Fund; total_units: number; total_cost: number; latest_nav: number; valuation_status: ValuationStatus }[] = [];
 
   for (const fund of funds) {
     const txs = txByFund[fund.id] || [];
@@ -61,20 +65,36 @@ export function computeHoldings(
       }
     }
 
-    const latestNav = latestNavs[fund.id]?.nav_per_unit ?? 0;
-    const marketValue = totalUnits * latestNav;
+    const navEntry = latestNavs[fund.id];
+    const hasNav = !!navEntry;
+    const latestNav = hasNav ? navEntry.nav_per_unit : 0;
+
+    // Determine valuation status and effective market value
+    let marketValue: number;
+    let valuationStatus: ValuationStatus;
+
+    if (totalUnits > 0 && !hasNav) {
+      // Missing NAV → fall back to cost basis
+      marketValue = totalCost;
+      valuationStatus = activeBackfillFundIds.has(fund.id) ? 'waiting_for_nav' : 'nav_unavailable';
+    } else {
+      marketValue = totalUnits * latestNav;
+      valuationStatus = 'ready';
+    }
+
     totalMarketValue += marketValue;
 
     if (totalUnits > 0 || includeZero) {
-      fundData.push({ fund, total_units: totalUnits, total_cost: totalCost, latest_nav: latestNav });
+      fundData.push({ fund, total_units: totalUnits, total_cost: totalCost, latest_nav: latestNav, valuation_status: valuationStatus });
     }
   }
 
   // Second pass: compute allocation %
   for (const fd of fundData) {
-    const marketValue = fd.total_units * fd.latest_nav;
-    const gainLoss = marketValue - fd.total_cost;
-    const returnPct = fd.total_cost > 0 ? (gainLoss / fd.total_cost) * 100 : 0;
+    const hasNav = fd.valuation_status === 'ready';
+    const marketValue = hasNav ? fd.total_units * fd.latest_nav : fd.total_cost;
+    const gainLoss = hasNav ? marketValue - fd.total_cost : 0;
+    const returnPct = hasNav && fd.total_cost > 0 ? (gainLoss / fd.total_cost) * 100 : 0;
     const allocationPct = totalMarketValue > 0 ? (marketValue / totalMarketValue) * 100 : 0;
 
     holdings.push({
@@ -87,6 +107,7 @@ export function computeHoldings(
       gain_loss: gainLoss,
       return_pct: returnPct,
       allocation_pct: allocationPct,
+      valuation_status: fd.valuation_status,
     });
   }
 

@@ -44,26 +44,30 @@ export function HoldingsSummaryTable({ holdings, isLoading }: Props) {
                 </TableCell>
               </TableRow>
             )}
-            {holdings.map((h) => (
-              <TableRow key={h.fund.id}>
-                <TableCell className="pl-6">
-                  <p className="font-medium text-sm">{h.fund.fund_code}</p>
-                  <p className="text-xs text-muted-foreground">{h.fund.asset_class}</p>
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-sm">
-                  {formatCurrency(h.market_value)}
-                </TableCell>
-                <TableCell className={`text-right tabular-nums text-sm ${gainLossColor(h.gain_loss)}`}>
-                  {formatCurrency(h.gain_loss)}
-                </TableCell>
-                <TableCell className={`text-right tabular-nums text-sm ${gainLossColor(h.return_pct)}`}>
-                  {formatPercent(h.return_pct)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-sm pr-6">
-                  {h.allocation_pct.toFixed(1)}%
-                </TableCell>
-              </TableRow>
-            ))}
+            {holdings.map((h) => {
+              const isReady = h.valuation_status === 'ready';
+              return (
+                <TableRow key={h.fund.id}>
+                  <TableCell className="pl-6">
+                    <p className="font-medium text-sm">{h.fund.fund_code}</p>
+                    <p className="text-xs text-muted-foreground">{h.fund.asset_class}</p>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">
+                    {formatCurrency(h.market_value)}
+                    {!isReady && <span className="text-[10px] text-muted-foreground ml-1">(cost)</span>}
+                  </TableCell>
+                  <TableCell className={`text-right tabular-nums text-sm ${isReady ? gainLossColor(h.gain_loss) : 'text-muted-foreground'}`}>
+                    {isReady ? formatCurrency(h.gain_loss) : "—"}
+                  </TableCell>
+                  <TableCell className={`text-right tabular-nums text-sm ${isReady ? gainLossColor(h.return_pct) : 'text-muted-foreground'}`}>
+                    {isReady ? formatPercent(h.return_pct) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-sm pr-6">
+                    {h.allocation_pct.toFixed(1)}%
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>

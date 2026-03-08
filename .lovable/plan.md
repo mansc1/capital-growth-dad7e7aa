@@ -1,75 +1,36 @@
 
 
-# Fix Portfolio Valuation: Cost-Basis Fallback for Missing NAV
+# Manage Funds — Final Implementation Plan
 
-## Problem
+## Adjustment: sync-nav fund identity
 
-Line 64 in `src/lib/holdings.ts`: `const latestNav = latestNavs[fund.id]?.nav_per_unit ?? 0;` — missing NAV defaults to 0, producing `market_value = 0` and `return = -100%`. The same issue exists in the server-side `rebuild-portfolio-snapshots.ts` (line 96-97: funds with no NAV are skipped entirely via `if (!nav) continue`, excluding their cost from totals).
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
 
-## Changes
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
 
-### 1. Add `valuation_status` to `Holding` type (`src/types/portfolio.ts`)
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
 
-Add a new field to the `Holding` interface:
+## Everything else — unchanged from approved plan
 
-```typescript
-valuation_status: 'ready' | 'waiting_for_nav' | 'nav_unavailable';
+### Migration
+```sql
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
 ```
 
-### 2. Fix core valuation logic (`src/lib/holdings.ts`)
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
 
-Change `computeHoldings` signature to accept an optional `activeBackfillFundIds` set (fund IDs with pending/processing backfill jobs) so it can distinguish `waiting_for_nav` from `nav_unavailable`.
-
-For each fund with `total_units > 0`:
-- If `latestNavs[fund.id]` exists: use real NAV, status = `'ready'`
-- If missing and fund is in `activeBackfillFundIds`: `market_value = total_cost`, `gain_loss = 0`, `return_pct = 0`, status = `'waiting_for_nav'`
-- If missing and no active backfill: same cost-basis fallback, status = `'nav_unavailable'`
-
-The `totalMarketValue` accumulator uses the effective market value (cost basis for missing NAV funds) so allocation percentages remain correct.
-
-### 3. Update `useHoldings` hook (`src/hooks/use-holdings.ts`)
-
-Fetch active backfill fund IDs alongside existing queries:
-
-```typescript
-supabase.from('nav_backfill_queue')
-  .select('fund_id')
-  .in('status', ['pending', 'processing'])
-```
-
-Pass the resulting `Set<string>` to `computeHoldings`.
-
-### 4. Update Holdings UI (`src/pages/Holdings.tsx`)
-
-For the Latest NAV column:
-- `ready`: show `formatNumber(h.latest_nav)`
-- `waiting_for_nav`: show `"Updating..."` in amber text
-- `nav_unavailable`: show `"—"`
-
-For Market Value when not `ready`: show value with a small "(cost basis)" label.
-
-For Return when not `ready`: show `"—"` instead of `formatPercent(0)`.
-
-### 5. Update Dashboard Holdings Summary (`src/components/dashboard/HoldingsSummaryTable.tsx`)
-
-Same conditional rendering for gain/loss and return columns based on `valuation_status`.
-
-### 6. Fix server-side snapshot rebuild (`supabase/functions/_shared/portfolio/rebuild-portfolio-snapshots.ts`)
-
-Currently skips funds with no NAV (`if (!nav) continue`). Change to:
-- If no NAV row exists, use cost-basis fallback: `totalValue += holding.totalCost`, `totalCost += holding.totalCost`
-- This prevents the snapshot from excluding funds that are waiting for NAV data.
-
-## Files Summary
-
-| File | Change |
-|------|--------|
-| `src/types/portfolio.ts` | Add `valuation_status` to `Holding` |
-| `src/lib/holdings.ts` | Cost-basis fallback + status assignment |
-| `src/hooks/use-holdings.ts` | Fetch active backfill fund IDs, pass to compute |
-| `src/pages/Holdings.tsx` | Conditional UI per valuation status |
-| `src/components/dashboard/HoldingsSummaryTable.tsx` | Conditional UI per valuation status |
-| `supabase/functions/_shared/portfolio/rebuild-portfolio-snapshots.ts` | Cost-basis fallback for missing NAV |
-
-Note: `usePortfolioTimeSeries` already implements cost-basis fallback correctly (lines 127-129) — no changes needed there. Dashboard `StatCards` derives from holdings data so it will automatically reflect the fix.
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 
