@@ -1,35 +1,36 @@
 
 
-# Implementation: Client-Side Portfolio Time Series
+# Manage Funds — Final Implementation Plan
 
-## File 1: CREATE `src/hooks/use-portfolio-time-series.ts`
+## Adjustment: sync-nav fund identity
 
-Hook returning `{ data: PortfolioSnapshot[], isLoading: boolean }`.
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
 
-Single `useQuery` with key `['portfolio_time_series', range]` that:
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
 
-1. Fetches ALL transactions (sorted by `trade_date`) and ALL nav_history in parallel
-2. Builds `navLookup: Map<fundId, Map<dateStr, number>>` and `txByDate: Map<dateStr, Transaction[]>` (sorted by `created_at` then `id` within each date)
-3. Collects all unique dates from both, sorted ascending
-4. Walks dates with `fundState: Map<fundId, { units, cost, lastKnownNav: number | null }>` and a running `latestActualNavDate: string | null`
-5. Each date:
-   - Apply transactions: exact `computeHoldings` logic from `src/lib/holdings.ts`:
-     - buy/switch_in: `units += tx.units, cost += tx.amount + tx.fee`
-     - sell/switch_out: guard `totalUnits > 0` before division, use pre-tx units for ratio: `costReduction = (tx.units / preUnits) * cost`, then subtract; if `units <= 0.0001` reset BOTH to 0
-     - dividend reinvest: `units += tx.units, cost += tx.amount`; cash: no-op
-   - Update carry-forward NAV only from real navLookup entries; update `latestActualNavDate` only from real NAV observations
-   - Value: `lastKnownNav !== null` → `units × nav`; else → `cost` (cost-basis fallback)
-   - Emit point if any fund has units > 0 AND date >= rangeStart
-6. Returns `PortfolioSnapshot[]` shape with `snapshot_date` as semantic date, `latest_nav_date` from `latestActualNavDate`
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
 
-## File 2: MODIFY `src/pages/Dashboard.tsx`
+## Everything else — unchanged from approved plan
 
-- Line 3: `import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series"`
-- Line 22: `usePortfolioTimeSeries(chartRange)` replaces `usePortfolioSnapshots(chartRange)`
-- Line 23: `usePortfolioTimeSeries("ALL")` replaces `usePortfolioSnapshots("ALL")`
-- Lines 73, 80: derive `latestNavDate` from time series last point's `latest_nav_date`; remove `latestSnapshot`
-- Lines 81-85: remove `latestSnapshot` fallback — keep only `lastSuccess?.completed_at` for `lastSyncTime`
-- Stat cards, chart components, everything else unchanged
+### Migration
+```sql
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+```
 
-No other files changed.
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 

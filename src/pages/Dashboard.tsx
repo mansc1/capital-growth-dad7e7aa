@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePortfolioSnapshots } from "@/hooks/use-portfolio-snapshots";
+import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { useHoldings } from "@/hooks/use-holdings";
 import { useAllNavHistory } from "@/hooks/use-all-nav-history";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
@@ -19,8 +19,8 @@ import type { ChartRange } from "@/types/portfolio";
 
 export default function Dashboard() {
   const [chartRange, setChartRange] = useState<ChartRange>("ALL");
-  const { data: snapshots, isLoading: snapshotsLoading } = usePortfolioSnapshots(chartRange);
-  const { data: allSnapshots } = usePortfolioSnapshots("ALL");
+  const { data: snapshots, isLoading: snapshotsLoading } = usePortfolioTimeSeries(chartRange);
+  const { data: allSnapshots } = usePortfolioTimeSeries("ALL");
   const { data: holdings, isLoading: holdingsLoading } = useHoldings();
   const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange);
   const { lastSuccess } = useLastSuccessfulSync();
@@ -70,19 +70,16 @@ export default function Dashboard() {
     );
   }
 
-  const latestSnapshot = snapshots?.[snapshots.length - 1];
   const totalCost = holdings?.reduce((s, h) => s + h.total_cost, 0) ?? 0;
   const totalValue = holdings?.reduce((s, h) => s + h.market_value, 0) ?? 0;
   const totalGainLoss = totalValue - totalCost;
   const totalReturnPct = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
 
-
-  const latestNavDate = latestSnapshot?.latest_nav_date ?? null;
+  const lastTimeSeriesPoint = snapshots?.[snapshots.length - 1];
+  const latestNavDate = lastTimeSeriesPoint?.latest_nav_date ?? null;
   const lastSyncTime = lastSuccess?.completed_at
     ? new Date(lastSuccess.completed_at).toLocaleString()
-    : latestSnapshot
-      ? new Date(latestSnapshot.created_at).toLocaleString()
-      : null;
+    : null;
 
   return (
     <AppLayout>
