@@ -1,1 +1,4 @@
 project_id = "wasgiapsgiagwwiwnfcl"
+
+[functions.process-nav-backfill]
+verify_jwt = false
