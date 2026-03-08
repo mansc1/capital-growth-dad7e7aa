@@ -137,7 +137,17 @@ Deno.serve(async (req) => {
   const apiKeyHeader = req.headers.get("apikey") ?? "";
   const authHeader = req.headers.get("authorization") ?? "";
   const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  const isAuthorized = (apiKeyHeader && apiKeyHeader === anonKey) || (bearerToken && bearerToken === anonKey);
+
+  console.log("[update-nav-data] Auth debug:", {
+    hasAnonKey: !!anonKey,
+    anonKeyPrefix: anonKey?.substring(0, 20),
+    apiKeyHeaderPrefix: apiKeyHeader?.substring(0, 20),
+    bearerTokenPrefix: bearerToken?.substring(0, 20),
+    apiKeyMatch: apiKeyHeader === anonKey,
+    bearerMatch: bearerToken === anonKey,
+  });
+
+  const isAuthorized = (!!apiKeyHeader && apiKeyHeader === anonKey) || (!!bearerToken && bearerToken === anonKey);
   if (!anonKey || !isAuthorized) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
