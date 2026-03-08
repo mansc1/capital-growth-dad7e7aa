@@ -1,36 +1,67 @@
 
 
-# Manage Funds — Final Implementation Plan
+# Add Transaction Markers to Portfolio Value Chart
 
-## Adjustment: sync-nav fund identity
+## Implementation Plan (3 files)
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
-
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
-
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
-
-## Everything else — unchanged from approved plan
-
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+### 1. `src/types/portfolio.ts`
+Add after `net_flow?: number;` (line 60):
+```typescript
+has_transaction?: boolean;
+tx_count?: number;
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+### 2. `src/hooks/use-portfolio-time-series.ts`
+In the `result.push` block, after `net_flow: dayNetFlow,` (line 167), add:
+```typescript
+has_transaction: !!dayTxs,
+tx_count: dayTxs ? dayTxs.length : 0,
+```
 
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+### 3. `src/components/dashboard/PortfolioChart.tsx`
+
+**chartData** (lines 25-29) — explicitly populate for every point:
+```typescript
+const chartData = snapshots.map((s) => ({
+  date: s.snapshot_date,
+  value: Number(s.total_value),
+  dailyReturn: dailyReturns.get(s.snapshot_date) ?? null,
+  has_transaction: s.has_transaction ?? false,
+  tx_count: s.tx_count ?? 0,
+}));
+```
+
+**Tooltip** — after dailyReturn block (~line 123), add:
+```tsx
+{d.tx_count > 0 && (
+  <p className="text-xs text-muted-foreground">
+    Transactions: {d.tx_count}
+  </p>
+)}
+```
+
+**Area component** (lines 129-135) — replace with custom dot + activeDot:
+```tsx
+<Area
+  type="monotone"
+  dataKey="value"
+  stroke="hsl(var(--chart-1))"
+  strokeWidth={2}
+  fill="url(#portfolioGradient)"
+  dot={(props: any) => {
+    const { cx, cy, payload } = props;
+    if (!payload.has_transaction) return <g />;
+    return (
+      <circle cx={cx} cy={cy} r={3}
+        fill="hsl(var(--chart-1))"
+        stroke="hsl(var(--background))"
+        strokeWidth={1.5} />
+    );
+  }}
+  activeDot={{ r: 4, strokeWidth: 2 }}
+/>
+```
+
+### Not changed
+TWR chart, portfolio value calculation, range controls, empty states, database schema.
 
