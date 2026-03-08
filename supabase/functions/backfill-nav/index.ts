@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
       if (!fund) continue;
 
       const lookupCode = fund.sec_fund_code ?? fund.fund_code;
-      const projId = projIdMap.get(NORM(lookupCode));
+      const projId = projIdMap.get(lookupCode.trim().toUpperCase());
 
       if (!projId) {
         result.unresolvedFunds.push(fund.fund_code);
