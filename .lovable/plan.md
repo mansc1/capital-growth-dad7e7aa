@@ -1,36 +1,56 @@
 
 
-# Manage Funds — Final Implementation Plan
+# Fix Portfolio TWR: Cash-Flow Adjusted Calculation
 
-## Adjustment: sync-nav fund identity
+## 3 File Changes (no DB changes)
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
-
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
-
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
-
-## Everything else — unchanged from approved plan
-
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+### 1. `src/types/portfolio.ts` (line 59)
+Add after `created_at: string;`:
+```typescript
+/** Net external cash flow on this snapshot date only (buys/switch_in/reinvest minus sells/switch_out). Not carried forward. */
+net_flow?: number;
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+### 2. `src/hooks/use-portfolio-time-series.ts` (lines 65–149)
+Inside the date-walking loop, add `let dayNetFlow = 0;` reset fresh at the top of each date iteration. Track flows during transaction processing:
+- `buy` / `switch_in`: `dayNetFlow += tx.amount`
+- `sell` / `switch_out`: `dayNetFlow -= tx.amount`
+- `dividend` (reinvest): `dayNetFlow += tx.amount` (consistent with cost-basis convention)
+- `dividend` (cash): no flow
 
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+Emit `net_flow: dayNetFlow` explicitly on every snapshot (including dates with no transactions where it will be `0`).
+
+### 3. `src/analytics/returns.ts` — Three functions updated with identical `prevValue > 0` guard
+
+**`computePortfolioTWR`** (lines 34–42):
+```typescript
+const flow = filtered[i].net_flow ?? 0;
+const dailyReturn = prevValue > 0 ? (currValue - flow - prevValue) / prevValue : 0;
+```
+
+**`computeDailyReturns`** (lines 138–144):
+```typescript
+const prevValue = Number(sorted[i - 1].total_value);
+const currValue = Number(sorted[i].total_value);
+if (prevValue > 0) {
+  const flow = sorted[i].net_flow ?? 0;
+  map.set(sorted[i].snapshot_date, ((currValue - flow - prevValue) / prevValue) * 100);
+}
+```
+
+**`computePortfolioTWRSeries`** (lines 177–189):
+```typescript
+const flow = sorted[i].net_flow ?? 0;
+const dailyReturn = prevValue > 0 ? (currValue - flow - prevValue) / prevValue : 0;
+```
+
+All three use identical `prevValue > 0` guard so aggregate TWR and series cannot drift.
+
+### No changes to:
+- Dashboard.tsx, PortfolioTWRChart.tsx, StatCards.tsx — consume snapshots which will now include `net_flow`
+- Portfolio Value chart — uses `total_value` directly
+- Fund-level return functions — NAV-based, unaffected
+
+### Expected Result
+TWR drops from ~+409% to realistic range (~1-5%) based on actual NAV movement.
 
