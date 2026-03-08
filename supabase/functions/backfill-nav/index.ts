@@ -1,13 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { rebuildPortfolioSnapshotsForToday } from "../_shared/portfolio/rebuild-portfolio-snapshots.ts";
+import { loadFullSecDirectory } from "../_shared/nav/load-sec-directory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const NORM = (s: string): string => s.trim().toUpperCase();
 const BACKFILL_CAP_DAYS = 365;
 const THROTTLE_MS = 200;
 const MAX_RETRIES = 2;
@@ -247,19 +246,10 @@ Deno.serve(async (req) => {
 
     const fundMap = new Map((funds ?? []).map((f) => [f.id, f]));
 
-    const { data: dirEntries, error: dirErr } = await supabase
-      .from("sec_fund_directory")
-      .select("proj_id, proj_abbr_name");
-    if (dirErr) throw new Error(`Failed to query sec_fund_directory: ${dirErr.message}`);
+    // Paginated directory load (table has 14k+ rows, exceeds default 1000 limit)
+    const projIdMap = await loadFullSecDirectory(supabase, "backfill");
 
-    const projIdMap = new Map<string, string>();
-    for (const entry of dirEntries ?? []) {
-      if (entry.proj_abbr_name && entry.proj_id) {
-        projIdMap.set(NORM(entry.proj_abbr_name), entry.proj_id);
-      }
-    }
-
-    console.log(`[backfill] ${fundsWithGaps.length} fund(s) with gaps, projIdMap has ${projIdMap.size} entries`);
+    console.log(`[backfill] ${fundsWithGaps.length} fund(s) with gaps`);
 
     // 6. Process each fund
     for (const gap of fundsWithGaps) {
@@ -267,7 +257,7 @@ Deno.serve(async (req) => {
       if (!fund) continue;
 
       const lookupCode = fund.sec_fund_code ?? fund.fund_code;
-      const projId = projIdMap.get(NORM(lookupCode));
+      const projId = projIdMap.get(lookupCode.trim().toUpperCase());
 
       if (!projId) {
         result.unresolvedFunds.push(fund.fund_code);

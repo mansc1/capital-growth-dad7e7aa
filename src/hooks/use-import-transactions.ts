@@ -39,16 +39,36 @@ export function useImportTransactions() {
 
       // 2. Resolve unresolved funds via SEC directory
       if (unresolvedCodes.size > 0) {
-        const { data: secEntries, error: secErr } = await supabase
-          .from('sec_fund_directory')
-          .select('proj_id, proj_abbr_name, proj_name_en, proj_name_th, amc_name');
+        // Paginate sec_fund_directory — table has 14k+ rows, exceeds default 1000 limit
+        type SecEntry = { proj_id: string; proj_abbr_name: string; proj_name_en: string | null; proj_name_th: string | null; amc_name: string | null };
+        const allSecEntries: SecEntry[] = [];
+        let secFetchError: string | null = null;
+        {
+          let offset = 0;
+          const PAGE = 1000;
+          while (true) {
+            const { data, error: secErr } = await supabase
+              .from('sec_fund_directory')
+              .select('proj_id, proj_abbr_name, proj_name_en, proj_name_th, amc_name')
+              .range(offset, offset + PAGE - 1);
 
-        if (secErr) {
-          warnings.push('Failed to query SEC fund directory: ' + secErr.message);
+            if (secErr) {
+              secFetchError = 'Failed to query SEC fund directory: ' + secErr.message;
+              break;
+            }
+            if (!data || data.length === 0) break;
+            allSecEntries.push(...(data as SecEntry[]));
+            if (data.length < PAGE) break;
+            offset += PAGE;
+          }
+        }
+
+        if (secFetchError) {
+          warnings.push(secFetchError);
         } else {
           // Build SEC lookup map
-          const secByAbbr = new Map<string, typeof secEntries[0]>();
-          for (const entry of secEntries ?? []) {
+          const secByAbbr = new Map<string, typeof allSecEntries[0]>();
+          for (const entry of allSecEntries) {
             secByAbbr.set(NORM(entry.proj_abbr_name), entry);
           }
 
@@ -100,7 +120,7 @@ export function useImportTransactions() {
             if (!fundIdMap.has(code)) stillUnresolved.push(code);
           }
 
-          if (stillUnresolved.length > 0 && matchCount === 0 && (secEntries?.length ?? 0) === 0) {
+          if (stillUnresolved.length > 0 && matchCount === 0 && allSecEntries.length === 0) {
             warnings.push(
               `SEC Fund Directory appears empty. Consider refreshing it in Settings before importing. Unresolved funds: ${stillUnresolved.join(', ')}`,
             );

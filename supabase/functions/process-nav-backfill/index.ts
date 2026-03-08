@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { rebuildPortfolioSnapshotsForToday } from "../_shared/portfolio/rebuild-portfolio-snapshots.ts";
+import { loadFullSecDirectory } from "../_shared/nav/load-sec-directory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +8,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const NORM = (s: string): string => s.trim().toUpperCase();
 const THROTTLE_MS = 200;
 const MAX_RETRIES = 2;
 const BACKOFF_BASE_MS = 500;
@@ -150,18 +150,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Load SEC directory for proj_id resolution
-    const { data: dirEntries, error: dirErr } = await supabase
-      .from("sec_fund_directory")
-      .select("proj_id, proj_abbr_name");
-    if (dirErr) throw new Error(`Failed to query sec_fund_directory: ${dirErr.message}`);
-
-    const projIdMap = new Map<string, string>();
-    for (const entry of dirEntries ?? []) {
-      if (entry.proj_abbr_name && entry.proj_id) {
-        projIdMap.set(NORM(entry.proj_abbr_name), entry.proj_id);
-      }
-    }
+    // 2. Load SEC directory for proj_id resolution (paginated — table has 14k+ rows)
+    const projIdMap = await loadFullSecDirectory(supabase, "process-backfill");
 
     // 3. Process each job
     for (const job of pendingJobs) {
@@ -198,7 +188,7 @@ Deno.serve(async (req) => {
         }
 
         const lookupCode = fund.sec_fund_code ?? fund.fund_code;
-        const projId = projIdMap.get(NORM(lookupCode));
+        const projId = projIdMap.get(lookupCode.trim().toUpperCase());
 
         if (!projId) {
           throw new Error(`No proj_id in SEC directory for ${lookupCode}`);

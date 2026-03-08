@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getNavProvider } from "../_shared/nav/fetch-latest-nav.ts";
 import { rebuildPortfolioSnapshotsForToday } from "../_shared/portfolio/rebuild-portfolio-snapshots.ts";
+import { loadFullSecDirectory } from "../_shared/nav/load-sec-directory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -149,22 +150,7 @@ Deno.serve(async (req) => {
     const isSec = providerName === "sec";
 
     if (isSec) {
-      const { data: dirEntries, error: dirErr } = await supabase
-        .from("sec_fund_directory")
-        .select("proj_id, proj_abbr_name");
-
-      if (dirErr) throw new Error(`Failed to query sec_fund_directory: ${dirErr.message}`);
-
-      projIdMap = new Map<string, string>();
-      if (dirEntries) {
-        for (const entry of dirEntries) {
-          if (entry.proj_abbr_name && entry.proj_id) {
-            projIdMap.set(NORM(entry.proj_abbr_name), entry.proj_id);
-          }
-        }
-      }
-
-      console.log(`[sync-nav] Built projIdMap with ${projIdMap.size} entries from sec_fund_directory`);
+      projIdMap = await loadFullSecDirectory(supabase, "sync-nav");
     }
 
     // 5. Pre-check resolution for SEC provider — skip unresolvable funds
