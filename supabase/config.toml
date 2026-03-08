@@ -2,3 +2,6 @@ project_id = "wasgiapsgiagwwiwnfcl"
 
 [functions.process-nav-backfill]
 verify_jwt = false
+
+[functions.update-nav-data]
+verify_jwt = false
