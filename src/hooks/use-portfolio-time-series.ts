@@ -63,6 +63,7 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
       const result: PortfolioSnapshot[] = [];
 
       for (const date of allDates) {
+        let dayNetFlow = 0;
         // Apply transactions for this date
         const dayTxs = txByDate.get(date);
         if (dayTxs) {
