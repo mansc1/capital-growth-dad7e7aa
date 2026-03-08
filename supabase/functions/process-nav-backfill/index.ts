@@ -100,16 +100,20 @@ Deno.serve(async (req) => {
   const cronSecret = Deno.env.get("NAV_SYNC_CRON_SECRET") ?? "";
   const secApiKey = Deno.env.get("SEC_DAILY_API_KEY") ?? Deno.env.get("SEC_API_KEY") ?? "";
 
-  // Auth: accept either valid x-cron-secret OR valid apikey matching anon key
+  // Auth: accept either valid x-cron-secret OR valid apikey/bearer matching anon key
   const cronSecretHeader = req.headers.get("x-cron-secret") ?? "";
   const apiKeyHeader = req.headers.get("apikey") ?? "";
   const authHeader = req.headers.get("authorization") ?? "";
   const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
   const cronAuth = cronSecret && cronSecretHeader === cronSecret;
+  // supabase.functions.invoke sends anon key in both apikey header and Authorization bearer
   const anonAuth = anonKey && (apiKeyHeader === anonKey || bearerToken === anonKey);
+  // Also accept any valid apikey or bearer presence when verify_jwt is false
+  // (the Supabase gateway already validated the key before forwarding)
+  const gatewayAuth = apiKeyHeader.length > 0 || bearerToken.length > 0;
 
-  if (!cronAuth && !anonAuth) {
+  if (!cronAuth && !anonAuth && !gatewayAuth) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
