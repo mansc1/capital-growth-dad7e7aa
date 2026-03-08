@@ -28,6 +28,37 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
     dailyReturn: dailyReturns.get(s.snapshot_date) ?? null,
   }));
 
+  const header = (
+    <CardHeader className="pb-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">Portfolio Value</p>
+          <div className="flex items-baseline gap-3">
+            <CardTitle className="text-3xl font-bold tabular-nums">
+              {formatCurrency(latestValue)}
+            </CardTitle>
+            <span className={`text-sm font-medium ${gainLossColor(returnPct)}`}>
+              {formatPercent(returnPct)}
+            </span>
+          </div>
+        </div>
+        <div className="flex gap-1">
+          {ranges.map((r) => (
+            <Button
+              key={r}
+              variant={range === r ? "default" : "ghost"}
+              size="sm"
+              className="h-7 px-3 text-xs"
+              onClick={() => onRangeChange(r)}
+            >
+              {r}
+            </Button>
+          ))}
+        </div>
+      </div>
+    </CardHeader>
+  );
+
   if (isLoading) {
     return (
       <Card>
@@ -38,39 +69,27 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
     );
   }
 
+  if (chartData.length < 2) {
+    return (
+      <Card>
+        {header}
+        <CardContent className="pb-4">
+          <div className="h-[280px] flex items-center justify-center">
+            <p className="text-sm text-muted-foreground">
+              Add transactions or wait for NAV updates to display chart
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">Portfolio Value</p>
-            <div className="flex items-baseline gap-3">
-              <CardTitle className="text-3xl font-bold tabular-nums">
-                {formatCurrency(latestValue)}
-              </CardTitle>
-              <span className={`text-sm font-medium ${gainLossColor(returnPct)}`}>
-                {formatPercent(returnPct)}
-              </span>
-            </div>
-          </div>
-          <div className="flex gap-1">
-            {ranges.map((r) => (
-              <Button
-                key={r}
-                variant={range === r ? "default" : "ghost"}
-                size="sm"
-                className="h-7 px-3 text-xs"
-                onClick={() => onRangeChange(r)}
-              >
-                {r}
-              </Button>
-            ))}
-          </div>
-        </div>
-      </CardHeader>
+      {header}
       <CardContent className="pb-4">
         <div className="h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
               <defs>
                 <linearGradient id="portfolioGradient" x1="0" y1="0" x2="0" y2="1">
