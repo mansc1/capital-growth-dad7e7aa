@@ -246,19 +246,10 @@ Deno.serve(async (req) => {
 
     const fundMap = new Map((funds ?? []).map((f) => [f.id, f]));
 
-    const { data: dirEntries, error: dirErr } = await supabase
-      .from("sec_fund_directory")
-      .select("proj_id, proj_abbr_name");
-    if (dirErr) throw new Error(`Failed to query sec_fund_directory: ${dirErr.message}`);
+    // Paginated directory load (table has 14k+ rows, exceeds default 1000 limit)
+    const projIdMap = await loadFullSecDirectory(supabase, "backfill");
 
-    const projIdMap = new Map<string, string>();
-    for (const entry of dirEntries ?? []) {
-      if (entry.proj_abbr_name && entry.proj_id) {
-        projIdMap.set(NORM(entry.proj_abbr_name), entry.proj_id);
-      }
-    }
-
-    console.log(`[backfill] ${fundsWithGaps.length} fund(s) with gaps, projIdMap has ${projIdMap.size} entries`);
+    console.log(`[backfill] ${fundsWithGaps.length} fund(s) with gaps`);
 
     // 6. Process each fund
     for (const gap of fundsWithGaps) {

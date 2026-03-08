@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
         }
 
         const lookupCode = fund.sec_fund_code ?? fund.fund_code;
-        const projId = projIdMap.get(NORM(lookupCode));
+        const projId = projIdMap.get(lookupCode.trim().toUpperCase());
 
         if (!projId) {
           throw new Error(`No proj_id in SEC directory for ${lookupCode}`);
