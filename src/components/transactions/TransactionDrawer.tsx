@@ -166,8 +166,8 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
         navWasAutoFilled.current = true;
       }
   } else {
-    // New lookup returned null — clear stale auto-filled or DB-loaded value
-    form.setValue("nav_at_trade", "" as any);
+    // No NAV available — use 0 as pending backfill placeholder and clear validation errors
+    form.setValue("nav_at_trade", 0);
     form.clearErrors("nav_at_trade");
     navWasAutoFilled.current = false;
   }
