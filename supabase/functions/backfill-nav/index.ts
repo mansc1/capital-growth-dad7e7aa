@@ -1,13 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { rebuildPortfolioSnapshotsForToday } from "../_shared/portfolio/rebuild-portfolio-snapshots.ts";
+import { loadFullSecDirectory } from "../_shared/nav/load-sec-directory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const NORM = (s: string): string => s.trim().toUpperCase();
 const BACKFILL_CAP_DAYS = 365;
 const THROTTLE_MS = 200;
 const MAX_RETRIES = 2;
