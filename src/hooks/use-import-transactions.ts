@@ -120,7 +120,7 @@ export function useImportTransactions() {
             if (!fundIdMap.has(code)) stillUnresolved.push(code);
           }
 
-          if (stillUnresolved.length > 0 && matchCount === 0 && (secEntries?.length ?? 0) === 0) {
+          if (stillUnresolved.length > 0 && matchCount === 0 && allSecEntries.length === 0) {
             warnings.push(
               `SEC Fund Directory appears empty. Consider refreshing it in Settings before importing. Unresolved funds: ${stillUnresolved.join(', ')}`,
             );
