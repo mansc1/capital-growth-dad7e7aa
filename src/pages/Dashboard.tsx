@@ -70,19 +70,16 @@ export default function Dashboard() {
     );
   }
 
-  const latestSnapshot = snapshots?.[snapshots.length - 1];
   const totalCost = holdings?.reduce((s, h) => s + h.total_cost, 0) ?? 0;
   const totalValue = holdings?.reduce((s, h) => s + h.market_value, 0) ?? 0;
   const totalGainLoss = totalValue - totalCost;
   const totalReturnPct = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
 
-
-  const latestNavDate = latestSnapshot?.latest_nav_date ?? null;
+  const lastTimeSeriesPoint = snapshots?.[snapshots.length - 1];
+  const latestNavDate = lastTimeSeriesPoint?.latest_nav_date ?? null;
   const lastSyncTime = lastSuccess?.completed_at
     ? new Date(lastSuccess.completed_at).toLocaleString()
-    : latestSnapshot
-      ? new Date(latestSnapshot.created_at).toLocaleString()
-      : null;
+    : null;
 
   return (
     <AppLayout>
