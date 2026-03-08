@@ -48,7 +48,21 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
       const dateSet = new Set<string>();
       for (const tx of txData) dateSet.add(tx.trade_date);
       for (const row of navData) dateSet.add(row.nav_date);
-      const allDates = Array.from(dateSet).sort();
+
+      if (dateSet.size === 0) return [];
+
+      const sortedUnique = Array.from(dateSet).sort();
+      const startDateStr = sortedUnique[0];
+      const endDateStr = sortedUnique[sortedUnique.length - 1];
+
+      // Generate continuous daily dates from start to end
+      const allDates: string[] = [];
+      const cur = new Date(startDateStr + 'T00:00:00');
+      const endD = new Date(endDateStr + 'T00:00:00');
+      while (cur <= endD) {
+        allDates.push(cur.toISOString().split('T')[0]);
+        cur.setDate(cur.getDate() + 1);
+      }
 
       // Compute range start
       let rangeStart: string | null = null;
