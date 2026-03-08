@@ -8,7 +8,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const NORM = (s: string): string => s.trim().toUpperCase();
 const THROTTLE_MS = 200;
 const MAX_RETRIES = 2;
 const BACKOFF_BASE_MS = 500;
