@@ -124,6 +124,11 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
                           Daily: {formatPercent(d.dailyReturn)}
                         </p>
                       )}
+                      {d.tx_count > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Transactions: {d.tx_count}
+                        </p>
+                      )}
                     </div>
                   );
                 }}
