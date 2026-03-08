@@ -26,6 +26,8 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
     date: s.snapshot_date,
     value: Number(s.total_value),
     dailyReturn: dailyReturns.get(s.snapshot_date) ?? null,
+    has_transaction: s.has_transaction ?? false,
+    tx_count: s.tx_count ?? 0,
   }));
 
   const header = (
