@@ -140,7 +140,8 @@ export function computeDailyReturns(
     const prevValue = Number(sorted[i - 1].total_value);
     const currValue = Number(sorted[i].total_value);
     if (prevValue > 0) {
-      map.set(sorted[i].snapshot_date, ((currValue / prevValue) - 1) * 100);
+      const flow = sorted[i].net_flow ?? 0;
+      map.set(sorted[i].snapshot_date, ((currValue - flow - prevValue) / prevValue) * 100);
     }
   }
 
