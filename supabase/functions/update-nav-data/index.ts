@@ -133,9 +133,12 @@ Deno.serve(async (req) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const cronSecret = Deno.env.get("NAV_SYNC_CRON_SECRET") ?? "";
 
-  // Auth: validate apikey header
+  // Auth: validate apikey header OR Authorization bearer token
   const apiKeyHeader = req.headers.get("apikey") ?? "";
-  if (!anonKey || apiKeyHeader !== anonKey) {
+  const authHeader = req.headers.get("authorization") ?? "";
+  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  const isAuthorized = (apiKeyHeader && apiKeyHeader === anonKey) || (bearerToken && bearerToken === anonKey);
+  if (!anonKey || !isAuthorized) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
