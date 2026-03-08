@@ -1,70 +1,39 @@
-import { useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, CheckCircle2, XCircle, Clock, Database, History, Loader2 } from "lucide-react";
-import { useNavSync } from "@/hooks/use-nav-sync";
-import { useNavBackfill } from "@/hooks/use-nav-backfill";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
 import { useBackfillStatus } from "@/hooks/use-backfill-status";
-import { supabase } from "@/integrations/supabase/client";
+import { useUpdateNavData } from "@/hooks/use-update-nav-data";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
-  const { syncNav, isLoading: syncing } = useNavSync();
-  const { backfillNav, isLoading: backfilling } = useNavBackfill();
   const { lastSuccess, latestRun, isLoading: syncLoading } = useLastSuccessfulSync();
   const { activeCount: backfillActiveCount } = useBackfillStatus();
-  const [refreshingDirectory, setRefreshingDirectory] = useState(false);
+  const { updateNavData, isLoading: updating } = useUpdateNavData();
 
-  const handleRefreshDirectory = async () => {
-    setRefreshingDirectory(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("sync-sec-fund-directory");
-      if (error) throw error;
-      if (data?.success) {
-        toast.success(`SEC directory refreshed: ${data.totalFunds} funds from ${data.totalAmcs} AMCs`);
-      } else {
-        toast.error(data?.error ?? "Failed to refresh SEC directory");
-      }
-    } catch (err) {
-      toast.error(`Failed: ${(err as Error).message}`);
-    } finally {
-      setRefreshingDirectory(false);
-    }
-  };
+  const handleUpdateNavData = async () => {
+    const result = await updateNavData();
 
-  const handleSync = async () => {
-    const result = await syncNav();
-    if (result?.success && result.processedFunds === 0) {
-      toast.info("No portfolio funds available for NAV sync yet.");
-    } else if (result?.success) {
-      toast.success(
-        `NAV sync complete: ${result.insertedRows} inserted, ${result.updatedRows} updated, ${result.skippedFunds} skipped`
-      );
-    } else if (result) {
-      toast.error(`Sync finished with errors: ${result.errors.join(", ")}`);
-    } else {
-      toast.error("NAV sync failed. Check your connection and try again.");
-    }
-  };
-
-  const handleBackfill = async () => {
-    const result = await backfillNav();
     if (!result) {
-      toast.error("Backfill failed. Check your connection and try again.");
+      toast.error("NAV update failed. Check your connection and try again.");
       return;
     }
 
-    if (result.fundsEnqueued === 0) {
-      toast.info("All funds already have sufficient NAV coverage.");
+    if (!result.success) {
+      toast.error(`NAV update failed: ${result.message}`);
+    } else if (result.backfillJobsEnqueued > 0) {
+      toast.success("NAV data updated. Historical NAV is being updated in the background.");
     } else {
-      toast.success(
-        `Backfill queued for ${result.fundsEnqueued} fund(s). Processing in the background.`
-      );
+      toast.success("NAV data updated successfully.");
+    }
+
+    if (result.warnings.length > 0) {
+      console.warn("[update-nav-data] warnings:", result.warnings);
+      toast.warning(`Completed with ${result.warnings.length} warning(s).`);
     }
   };
 
@@ -81,8 +50,6 @@ export default function SettingsPage() {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-
-  const backfillDisabled = backfilling || backfillActiveCount > 0;
 
   return (
     <AppLayout>
@@ -112,12 +79,16 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">NAV Data Sync</CardTitle>
+            <CardTitle className="text-base">NAV Data Maintenance</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Refresh the SEC fund directory, sync the latest NAV, and fill any missing historical NAV automatically.
+            </p>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-muted-foreground text-xs mb-1">Provider</p>
+                <p className="text-muted-foreground text-xs mb-1">Data Source</p>
                 <p className="font-medium">
                   {(() => {
                     const p = latestRun?.provider;
@@ -128,19 +99,19 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs mb-1">Last Sync Status</p>
+                <p className="text-muted-foreground text-xs mb-1">Last Update Status</p>
                 <div className="flex items-center gap-2">
                   {syncLoading ? (
                     <span className="text-muted-foreground">Loading…</span>
                   ) : latestRun ? (
                     statusBadge(latestRun.status)
                   ) : (
-                    <span className="text-muted-foreground">No syncs yet</span>
+                    <span className="text-muted-foreground">No updates yet</span>
                   )}
                 </div>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs mb-1">Last Successful Sync</p>
+                <p className="text-muted-foreground text-xs mb-1">Last Successful Update</p>
                 <p className="font-medium">
                   {lastSuccess
                     ? new Date(lastSuccess.completed_at!).toLocaleString()
@@ -148,9 +119,11 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground text-xs mb-1">Latest NAV Date</p>
+                <p className="text-muted-foreground text-xs mb-1">Background Jobs</p>
                 <p className="font-medium">
-                  {lastSuccess?.completed_at ? "See dashboard" : "—"}
+                  {backfillActiveCount > 0
+                    ? `${backfillActiveCount} active`
+                    : "None"}
                 </p>
               </div>
             </div>
@@ -161,37 +134,6 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <Button onClick={handleSync} disabled={syncing} size="sm" className="mt-2">
-              <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
-              {syncing ? "Syncing…" : "Sync NAV Now"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">SEC Fund Directory</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Refresh the cached SEC Thailand fund directory. This crawls all AMCs from the SEC API and stores the fund list locally for fast search when assigning SEC fund codes.
-            </p>
-            <Button onClick={handleRefreshDirectory} disabled={refreshingDirectory} size="sm">
-              <Database className={`h-4 w-4 mr-2 ${refreshingDirectory ? "animate-pulse" : ""}`} />
-              {refreshingDirectory ? "Refreshing…" : "Refresh SEC Directory"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Historical NAV Backfill</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Fetch missing historical NAV data for funds with transactions older than existing coverage. This on-demand process queries dates individually and may take several minutes depending on the number of funds and date range.
-            </p>
-
             {backfillActiveCount > 0 && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -199,9 +141,9 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <Button onClick={handleBackfill} disabled={backfillDisabled} size="sm">
-              <History className={`h-4 w-4 mr-2 ${backfilling ? "animate-spin" : ""}`} />
-              {backfilling ? "Backfilling…" : backfillActiveCount > 0 ? "Backfill in Progress" : "Backfill Historical NAV"}
+            <Button onClick={handleUpdateNavData} disabled={updating} size="sm" className="mt-2">
+              <RefreshCw className={`h-4 w-4 mr-2 ${updating ? "animate-spin" : ""}`} />
+              {updating ? "Updating…" : "Update NAV Data"}
             </Button>
           </CardContent>
         </Card>
