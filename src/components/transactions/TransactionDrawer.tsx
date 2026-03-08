@@ -36,8 +36,16 @@ const baseSchema = z.object({
   trade_date: z.string().min(1, "Required"),
   units: z.number().min(0.0001, "Must be positive"),
   amount: z.number().min(0, "Must be non-negative"),
-  // 0 = pending historical NAV backfill placeholder, not a real NAV value
-  nav_at_trade: z.number().min(0),
+  // 0 = pending historical NAV backfill placeholder, not a real NAV value.
+  // It satisfies the DB NOT NULL constraint while background backfill resolves the real NAV.
+  nav_at_trade: z.preprocess(
+    (val) => {
+      if (val === "" || val === null || val === undefined) return 0;
+      const num = Number(val);
+      return Number.isNaN(num) ? 0 : num;
+    },
+    z.number().min(0)
+  ),
   fee: z.number().min(0, "Cannot be negative"),
   note: z.string().optional(),
   dividend_type: z.enum(["cash", "reinvest"]).nullable().optional(),
