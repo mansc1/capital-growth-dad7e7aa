@@ -243,11 +243,13 @@ export function computeFundReturnSeries(
 
   validFundCodes.sort();
 
-  // Collect all unique dates
+  // Collect all unique dates and extend to today
   const allDates = new Set<string>();
   for (const series of fundSeries.values()) {
     for (const date of series.keys()) allDates.add(date);
   }
+  const today = new Date().toISOString().split('T')[0];
+  allDates.add(today);
 
   const sortedDates = [...allDates].sort();
 
