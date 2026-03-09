@@ -1,36 +1,39 @@
 
 
-# Manage Funds — Final Implementation Plan
+# Fix: Add Transaction button blocked by units validation
 
-## Adjustment: sync-nav fund identity
+## Root Cause
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+The Zod schema requires `units: z.number().min(0.0001, "Must be positive")`. In Add mode for buy/switch_in types:
 
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
+1. NAV is not available (shows "Historical NAV will be fetched automatically")
+2. Units are computed from `amount / nav` — but since NAV = 0, the computation is skipped
+3. Units stays at `0`, which fails the `.min(0.0001)` validation
+4. `form.handleSubmit` silently blocks submission — no visible error because the units field isn't even rendered for buy types
 
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
+Same issue applies when NAV IS available but amount is 0.
 
-## Everything else — unchanged from approved plan
+## Fix
 
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+In `src/components/transactions/TransactionDrawer.tsx`:
+
+**Line 37** — Change units validation to allow 0:
+```ts
+units: z.number().min(0),
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+**In `onSubmit` (line 284)** — Add manual validation for cases where units must be positive:
+- For sell/switch_out types: units must be > 0 (already has sell validation)
+- For buy/switch_in when NAV is available: warn if amount is 0 but still allow save
 
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+This matches the architecture: for buys, units are resolved later when NAV becomes available via the write-back pipeline. The DB stores `units=0` temporarily, similar to `nav_at_trade=0`.
+
+**Alternative simpler approach**: Use `z.number().min(0)` for units and add explicit sell-type validation in `onSubmit` (which already exists at line 292). This is the cleanest fix since:
+- Buy types: units=0 is valid (will be computed when NAV arrives)
+- Sell types: already validated manually at line 292
+- The `.min(0.0001)` guard was overly strict for the new system-managed NAV flow
+
+### Single change needed
+
+Line 37: `units: z.number().min(0.0001, "Must be positive")` → `units: z.number().min(0)`
 
