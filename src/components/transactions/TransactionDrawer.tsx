@@ -372,9 +372,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     if (!navLoading && nav === null && navFundId && watchDate) {
       return (
         <p className="text-xs text-muted-foreground">
-          {editTransaction
-            ? "NAV for this date is not available yet. Saving will trigger an automatic historical NAV update."
-            : "No NAV found for this date. Save the transaction and historical NAV will be fetched automatically."}
+          NAV for this date is not available yet. Saving will trigger an automatic historical NAV update.
         </p>
       );
     }
@@ -497,32 +495,54 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="nav_at_trade"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>NAV at Trade</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.0001"
-                      {...field}
-                      value={field.value === 0 ? "" : field.value}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        const num = raw === "" ? 0 : Number(raw);
-                        field.onChange(Number.isNaN(num) ? 0 : num);
-                        setNavManuallyEdited(true);
-                        navWasAutoFilled.current = false;
-                      }}
-                    />
-                  </FormControl>
-                  {renderNavHelper()}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {editTransaction ? (
+              <FormField
+                control={form.control}
+                name="nav_at_trade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>NAV at Trade</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        {...field}
+                        value={field.value === 0 ? "" : field.value}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const num = raw === "" ? 0 : Number(raw);
+                          field.onChange(Number.isNaN(num) ? 0 : num);
+                          setNavManuallyEdited(true);
+                          navWasAutoFilled.current = false;
+                        }}
+                      />
+                    </FormControl>
+                    {renderNavHelper()}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">NAV at Trade</Label>
+                {navLoading || isResolving ? (
+                  <p className="text-sm text-muted-foreground">Looking up NAV…</p>
+                ) : nav !== null ? (
+                  <div>
+                    <p className="text-sm font-mono tabular-nums">{nav.toFixed(4)}</p>
+                    {!isExactMatch && navDateUsed && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Using latest available NAV from {navDateUsed}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    Historical NAV will be fetched automatically after saving.
+                  </p>
+                )}
+              </div>
+            )}
 
             {isDividend && (
               <div className="flex items-center gap-3">
