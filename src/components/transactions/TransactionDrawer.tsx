@@ -372,9 +372,7 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     if (!navLoading && nav === null && navFundId && watchDate) {
       return (
         <p className="text-xs text-muted-foreground">
-          {editTransaction
-            ? "NAV for this date is not available yet. Saving will trigger an automatic historical NAV update."
-            : "No NAV found for this date. Save the transaction and historical NAV will be fetched automatically."}
+          NAV for this date is not available yet. Saving will trigger an automatic historical NAV update.
         </p>
       );
     }
