@@ -34,7 +34,7 @@ const baseSchema = z.object({
   fund_id: z.string(),
   tx_type: z.enum(["buy", "sell", "dividend", "switch_in", "switch_out"]),
   trade_date: z.string().min(1, "Required"),
-  units: z.number().min(0),
+  units: z.number().min(0.0001, "Must be positive"),
   amount: z.number().min(0, "Must be non-negative"),
   // 0 = pending historical NAV backfill placeholder, not a real NAV value.
   // It satisfies the DB NOT NULL constraint while background backfill resolves the real NAV.
@@ -372,7 +372,9 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     if (!navLoading && nav === null && navFundId && watchDate) {
       return (
         <p className="text-xs text-muted-foreground">
-          NAV for this date is not available yet. Saving will trigger an automatic historical NAV update.
+          {editTransaction
+            ? "NAV for this date is not available yet. Saving will trigger an automatic historical NAV update."
+            : "No NAV found for this date. Save the transaction and historical NAV will be fetched automatically."}
         </p>
       );
     }
@@ -495,54 +497,32 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
               )}
             />
 
-            {editTransaction ? (
-              <FormField
-                control={form.control}
-                name="nav_at_trade"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>NAV at Trade</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.0001"
-                        {...field}
-                        value={field.value === 0 ? "" : field.value}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          const num = raw === "" ? 0 : Number(raw);
-                          field.onChange(Number.isNaN(num) ? 0 : num);
-                          setNavManuallyEdited(true);
-                          navWasAutoFilled.current = false;
-                        }}
-                      />
-                    </FormControl>
-                    {renderNavHelper()}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            ) : (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">NAV at Trade</Label>
-                {navLoading || isResolving ? (
-                  <p className="text-sm text-muted-foreground">Looking up NAV…</p>
-                ) : nav !== null ? (
-                  <div>
-                    <p className="text-sm font-mono tabular-nums">{nav.toFixed(4)}</p>
-                    {!isExactMatch && navDateUsed && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
-                        Using latest available NAV from {navDateUsed}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">
-                    Historical NAV will be fetched automatically after saving.
-                  </p>
-                )}
-              </div>
-            )}
+            <FormField
+              control={form.control}
+              name="nav_at_trade"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>NAV at Trade</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      {...field}
+                      value={field.value === 0 ? "" : field.value}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const num = raw === "" ? 0 : Number(raw);
+                        field.onChange(Number.isNaN(num) ? 0 : num);
+                        setNavManuallyEdited(true);
+                        navWasAutoFilled.current = false;
+                      }}
+                    />
+                  </FormControl>
+                  {renderNavHelper()}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {isDividend && (
               <div className="flex items-center gap-3">

@@ -53,10 +53,7 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
 
       const sortedUnique = Array.from(dateSet).sort();
       const startDateStr = sortedUnique[0];
-      const today = new Date().toISOString().split('T')[0];
-      const endDateStr = today > sortedUnique[sortedUnique.length - 1]
-        ? today
-        : sortedUnique[sortedUnique.length - 1];
+      const endDateStr = sortedUnique[sortedUnique.length - 1];
 
       // Generate continuous daily dates from start to end
       const allDates: string[] = [];
