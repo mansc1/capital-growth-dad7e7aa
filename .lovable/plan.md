@@ -1,36 +1,50 @@
 
 
-# Manage Funds — Final Implementation Plan
+# Fix: Extend Charts to Today's Date
 
-## Adjustment: sync-nav fund identity
+## Problem
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+1. **Portfolio TWR chart** ends at the last NAV observation date, not today. The time series generator (`use-portfolio-time-series.ts` line 56) uses the last data date as `endDateStr`.
+2. **Fund Performance chart** ends at the last NAV date and doesn't anchor to the first transaction date. The `computeFundReturnSeries` function only iterates dates present in `navHistory`.
 
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
+## Fix
 
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
+### 1. `src/hooks/use-portfolio-time-series.ts` — Extend end date to today
 
-## Everything else — unchanged from approved plan
+**Line 56**: Change `endDateStr` from `sortedUnique[sortedUnique.length - 1]` to `max(lastDataDate, today)`.
 
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+```ts
+const today = new Date().toISOString().split('T')[0];
+const endDateStr = today > sortedUnique[sortedUnique.length - 1]
+  ? today
+  : sortedUnique[sortedUnique.length - 1];
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+This extends the daily loop to today, carrying forward the last known NAV values for days without new data. The existing carry-forward logic already handles this correctly.
 
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+### 2. `src/analytics/returns.ts` — `computeFundReturnSeries`: extend to today with carry-forward
+
+After collecting all dates from `navHistory`, add today's date to `allDates` so the chart extends to the current date. The existing carry-forward (`lastKnown`) logic already fills gaps.
+
+```ts
+const today = new Date().toISOString().split('T')[0];
+allDates.add(today);
+```
+
+### 3. `src/components/dashboard/FundPerformanceChart.tsx` — Pass first transaction date
+
+Pass the earliest transaction date from `holdings` as the start date for the "ALL" range, so the chart begins from the first buy rather than the first NAV observation.
+
+Currently `startDate` is `undefined` for ALL range. Instead, compute the earliest transaction date from holdings and pass it. However, `holdings` doesn't directly expose first transaction date — the `navHistory` data already starts from the first available NAV which typically aligns with the first transaction's backfill.
+
+Actually, the real issue is just that the chart doesn't reach today. The start date from the screenshot (27 Mar) already looks correct — it starts from the first NAV data. The main fix is extending the end date to today.
+
+## Summary of Changes
+
+| File | Change |
+|------|--------|
+| `src/hooks/use-portfolio-time-series.ts` | Extend `endDateStr` to today |
+| `src/analytics/returns.ts` | Add today to `allDates` in `computeFundReturnSeries` |
+
+Two small edits, no schema or pipeline changes.
 
