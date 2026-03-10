@@ -289,6 +289,18 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
       return;
     }
 
+    // BUY/switch-in guard: amount must be positive
+    if (isBuyType && values.amount <= 0) {
+      form.setError("amount", { message: "Amount must be positive" });
+      return;
+    }
+
+    // SELL/switch-out guard: units must be positive
+    if (isSellType && values.units <= 0) {
+      form.setError("units", { message: "Units must be positive" });
+      return;
+    }
+
     // Sell validation — skip when pending (new fund has no units)
     if (isSellType && !pendingSecFund && values.units > currentUnits) {
       form.setError("units", { message: `Cannot sell more than ${currentUnits.toFixed(4)} units held` });
