@@ -18,7 +18,7 @@ export function useAllNavHistory(range: ChartRange = 'ALL') {
         query = query.gte('nav_date', from);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query.limit(10000);
       if (error) throw error;
       return data as NavHistory[];
     },

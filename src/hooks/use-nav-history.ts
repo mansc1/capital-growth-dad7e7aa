@@ -27,7 +27,8 @@ export function useLatestNavs() {
         .from('nav_history')
         .select('fund_id, nav_per_unit, nav_date')
         .order('fund_id')
-        .order('nav_date', { ascending: false });
+        .order('nav_date', { ascending: false })
+        .limit(10000);
       if (error) throw error;
       
       // Get latest per fund
