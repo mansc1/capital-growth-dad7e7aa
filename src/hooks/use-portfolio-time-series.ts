@@ -7,13 +7,9 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
   return useQuery({
     queryKey: ['portfolio_time_series', range],
     queryFn: async () => {
-      const [txRes, navRes] = await Promise.all([
-        supabase.from('transactions').select('*').order('trade_date'),
-        supabase.from('nav_history').select('*').order('nav_date', { ascending: true }).limit(10000),
-      ]);
-
+      // Sequential: need fund IDs before filtering nav_history
+      const txRes = await supabase.from('transactions').select('*').order('trade_date');
       if (txRes.error) throw txRes.error;
-      if (navRes.error) throw navRes.error;
 
       const txData = (txRes.data || []).map(t => ({
         ...t,
@@ -21,6 +17,17 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
         amount: Number(t.amount),
         fee: Number(t.fee),
       }));
+
+      const fundIds = [...new Set(txData.map(t => t.fund_id))].sort();
+      if (fundIds.length === 0) return [];
+
+      const navRes = await supabase
+        .from('nav_history')
+        .select('*')
+        .in('fund_id', fundIds)
+        .order('nav_date', { ascending: true })
+        .limit(10000);
+      if (navRes.error) throw navRes.error;
       const navData = navRes.data || [];
 
       // Build NAV lookup: fundId → dateStr → nav_per_unit

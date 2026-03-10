@@ -23,7 +23,16 @@ export default function Dashboard() {
   const { data: snapshots, isLoading: snapshotsLoading } = usePortfolioTimeSeries(chartRange);
   const { data: allSnapshots } = usePortfolioTimeSeries("ALL");
   const { data: holdings, isLoading: holdingsLoading } = useHoldings();
-  const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange);
+
+  const heldFundIds = useMemo(() =>
+    (holdings ?? [])
+      .filter(h => h.total_units > 0)
+      .map(h => h.fund.id)
+      .sort(),
+    [holdings]
+  );
+
+  const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange, heldFundIds);
   const { lastSuccess } = useLastSuccessfulSync();
   const { data: txData } = useTransactions();
   const navigate = useNavigate();
