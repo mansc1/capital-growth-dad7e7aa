@@ -1,42 +1,36 @@
 
 
-## Implement Real Risk Badge with Colored Dot in Fund Detail
+# Manage Funds — Final Implementation Plan
 
-**File:** `src/pages/FundDetail.tsx`
+## Adjustment: sync-nav fund identity
 
-### Changes
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
 
-**1. Add risk helper functions** (top of file or inline):
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
 
-```ts
-function normalizeRiskLevel(risk: number | null | undefined): number | null {
-  if (risk == null || risk < 1 || risk > 8) return null;
-  return risk;
-}
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
 
-function getRiskDotClass(risk: number | null): string {
-  if (risk === null) return "bg-gray-400";
-  if (risk <= 3) return "bg-green-500";
-  if (risk <= 5) return "bg-yellow-500";
-  if (risk <= 7) return "bg-orange-500";
-  return "bg-red-500";
-}
+## Everything else — unchanged from approved plan
 
-function getRiskLabel(risk: number | null): string {
-  return risk !== null ? `Risk ${risk}/8` : "Risk —";
-}
+### Migration
+```sql
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
 ```
 
-**2. Replace the risk Badge** (line 91) with a dot + label badge:
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
 
-```tsx
-<Badge variant="outline" className="flex items-center gap-1.5">
-  <span className={`inline-block h-2 w-2 rounded-full ${getRiskDotClass(normalizeRiskLevel(fund.risk_level))}`} />
-  {getRiskLabel(normalizeRiskLevel(fund.risk_level))}
-</Badge>
-```
-
-The `fund` object from `useFund(id)` already contains `risk_level` from the `funds` table, so no additional data fetching or SEC directory fallback is needed — the data is already there. If `risk_level` is null, the badge shows "Risk —" with a gray dot.
-
-No other files changed. No NAV/holdings/chart changes.
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 
