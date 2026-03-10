@@ -307,7 +307,9 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
       trade_date: values.trade_date,
       units: values.units,
       amount: values.amount,
-      nav_at_trade: values.nav_at_trade,
+      nav_at_trade: editTransaction
+        ? values.nav_at_trade
+        : (nav !== null && nav > 0) ? nav : 0,
       fee: values.fee,
       note: values.note || null,
       dividend_type: isDividend ? (values.dividend_type as DividendType) : null,
