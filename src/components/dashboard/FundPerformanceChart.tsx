@@ -22,9 +22,10 @@ interface Props {
   holdings: Holding[];
   isLoading: boolean;
   range: ChartRange;
+  fundFirstTxDate?: Map<string, string>;
 }
 
-export function FundPerformanceChart({ navHistory, holdings, isLoading, range }: Props) {
+export function FundPerformanceChart({ navHistory, holdings, isLoading, range, fundFirstTxDate }: Props) {
   const [hiddenFunds, setHiddenFunds] = useState<Set<string>>(new Set());
 
   const { heldFundIds, fundIdToCode } = useMemo(() => {
