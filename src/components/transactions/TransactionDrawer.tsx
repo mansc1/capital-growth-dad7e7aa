@@ -305,10 +305,10 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
       ? values.nav_at_trade
       : (nav !== null && nav > 0) ? nav : 0;
 
-    const isBuyType = values.tx_type === 'buy' || values.tx_type === 'switch_in';
+    const isBuyTypeForUnits = values.tx_type === 'buy' || values.tx_type === 'switch_in';
     const unitsToSave = editTransaction
       ? values.units
-      : (isBuyType && navToSave > 0 && values.amount > 0)
+      : (isBuyTypeForUnits && navToSave > 0 && values.amount > 0)
         ? values.amount / navToSave
         : values.units;
 
