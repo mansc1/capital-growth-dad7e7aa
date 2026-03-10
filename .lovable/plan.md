@@ -1,36 +1,35 @@
 
 
-# Manage Funds — Final Implementation Plan
+## Fix: Compute units for buy transactions in Add mode
 
-## Adjustment: sync-nav fund identity
+**File:** `src/components/transactions/TransactionDrawer.tsx`
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+**Single change** at lines 304-316 — after resolving `navToSave`, compute `unitsToSave` for Add mode buy/switch_in:
 
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
+```ts
+const navToSave = editTransaction
+  ? values.nav_at_trade
+  : (nav !== null && nav > 0) ? nav : 0;
 
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
+const isBuyType = values.tx_type === 'buy' || values.tx_type === 'switch_in';
+const unitsToSave = editTransaction
+  ? values.units
+  : (isBuyType && navToSave > 0 && values.amount > 0)
+    ? values.amount / navToSave
+    : values.units;
 
-## Everything else — unchanged from approved plan
-
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+const payload = {
+  fund_id: fundId,
+  tx_type: values.tx_type as TxType,
+  trade_date: values.trade_date,
+  units: unitsToSave,
+  amount: values.amount,
+  nav_at_trade: navToSave,
+  fee: values.fee,
+  note: values.note || null,
+  dividend_type: isDividend ? (values.dividend_type as DividendType) : null,
+};
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
-
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+This ensures Add mode buy/switch_in transactions compute `units = amount / nav` instead of relying on form state (which stays 0). Edit mode and sell/dividend flows are untouched.
 
