@@ -6,11 +6,25 @@ export function useNavHistory(fundId?: string) {
   return useQuery({
     queryKey: ['nav_history', fundId],
     queryFn: async () => {
+      let firstTradeDate: string | undefined;
+      if (fundId) {
+        const { data: firstTx } = await supabase
+          .from('transactions')
+          .select('trade_date')
+          .eq('fund_id', fundId)
+          .order('trade_date', { ascending: true })
+          .limit(1);
+        firstTradeDate = firstTx?.[0]?.trade_date;
+      }
+
       let query = supabase
         .from('nav_history')
         .select('*')
         .order('nav_date', { ascending: true });
+
       if (fundId) query = query.eq('fund_id', fundId);
+      if (firstTradeDate) query = query.gte('nav_date', firstTradeDate);
+
       const { data, error } = await query.limit(10000);
       if (error) throw error;
       return data as NavHistory[];
