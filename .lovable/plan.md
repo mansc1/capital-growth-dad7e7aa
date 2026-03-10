@@ -1,68 +1,36 @@
 
 
-# Refactor Add vs Edit Transaction NAV UX
+# Manage Funds — Final Implementation Plan
 
-## Single file: `src/components/transactions/TransactionDrawer.tsx`
+## Adjustment: sync-nav fund identity
 
-### Change 1 — Add `formatNumber` import (line 19)
-```ts
-import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
-import { formatNumber } from "@/lib/format";
+The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+
+**New sync-nav flow:**
+1. Select `id, fund_code, sec_fund_code` from active funds
+2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
+3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
+4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
+5. Use `fund.id` directly for all nav_history operations
+
+This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
+
+## Everything else — unchanged from approved plan
+
+### Migration
+```sql
+ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
 ```
 
-### Change 2 — Replace NAV field block (lines 500-525)
+### New files
+- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
+- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
+- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
+- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
 
-Replace the single `FormField` with a conditional:
-
-```tsx
-{editTransaction ? (
-  <FormField
-    control={form.control}
-    name="nav_at_trade"
-    render={({ field }) => (
-      <FormItem>
-        <FormLabel>NAV at Trade</FormLabel>
-        <FormControl>
-          <Input
-            type="number"
-            step="0.0001"
-            {...field}
-            value={field.value === 0 ? "" : field.value}
-            onChange={(e) => {
-              const raw = e.target.value;
-              const num = raw === "" ? 0 : Number(raw);
-              field.onChange(Number.isNaN(num) ? 0 : num);
-              setNavManuallyEdited(true);
-              navWasAutoFilled.current = false;
-            }}
-          />
-        </FormControl>
-        {renderNavHelper()}
-        <FormMessage />
-      </FormItem>
-    )}
-  />
-) : (
-  <div className="space-y-2">
-    <Label className="text-sm font-medium">NAV at Trade</Label>
-    <div className="rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-      {navLoading || isResolving
-        ? "Looking up NAV…"
-        : nav !== null && nav > 0
-          ? formatNumber(nav)
-          : "Historical NAV will be fetched automatically after saving."}
-    </div>
-  </div>
-)}
-```
-
-### What stays unchanged
-- All `useEffect` hooks for NAV autofill and units calculation
-- `nav_at_trade` stays in form state (set via `useEffect`, submitted at save time)
-- `renderNavHelper()` function definition (only called in Edit branch now)
-- Write-back logic, save hooks, schema, all other form fields
-
-### Why this works
-- **Add mode**: NAV field is read-only display. The existing `useEffect` at line 158 still sets `form.setValue("nav_at_trade", ...)` so the form value is correct at submit time. If NAV is unavailable, it stays 0 (placeholder) and write-back fills it later.
-- **Edit mode**: Completely unchanged — editable input with manual override and helper text.
+### Modified files
+- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
+- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
+- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
+- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
 
