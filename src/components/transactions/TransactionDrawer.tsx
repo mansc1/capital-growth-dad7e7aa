@@ -20,7 +20,7 @@ import { useResolveFundIdBySecCode } from "@/hooks/use-resolve-fund-id-by-sec-co
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
 import { formatNumber } from "@/lib/format";
 import { SecFundSearchPopover } from "@/components/funds/SecFundSearchPopover";
-import { supabase } from "@/integrations/supabase/client";
+
 import type { TransactionWithFund, TxType, DividendType } from "@/types/portfolio";
 import type { SecFundResult } from "@/hooks/use-sec-fund-search";
 
