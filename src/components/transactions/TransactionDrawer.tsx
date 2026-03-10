@@ -35,7 +35,7 @@ const baseSchema = z.object({
   fund_id: z.string(),
   tx_type: z.enum(["buy", "sell", "dividend", "switch_in", "switch_out"]),
   trade_date: z.string().min(1, "Required"),
-  units: z.number().min(0.0001, "Must be positive"),
+  units: z.number().min(0),
   amount: z.number().min(0, "Must be non-negative"),
   // 0 = pending historical NAV backfill placeholder, not a real NAV value.
   // It satisfies the DB NOT NULL constraint while background backfill resolves the real NAV.
@@ -286,6 +286,18 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     // Submit-time fund validation
     if (!values.fund_id && !pendingSecFund) {
       form.setError("fund_id", { message: "Select a fund" });
+      return;
+    }
+
+    // BUY/switch-in guard: amount must be positive
+    if (isBuyType && values.amount <= 0) {
+      form.setError("amount", { message: "Amount must be positive" });
+      return;
+    }
+
+    // SELL/switch-out guard: units must be positive
+    if (isSellType && values.units <= 0) {
+      form.setError("units", { message: "Units must be positive" });
       return;
     }
 
