@@ -14,6 +14,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useActiveFunds } from "@/hooks/use-active-funds";
 import { useEnsureFund } from "@/hooks/use-ensure-fund";
+import { useHoldings } from "@/hooks/use-holdings";
 import { useNavForTradeDate } from "@/hooks/use-nav-for-trade-date";
 import { useResolveFundIdBySecCode } from "@/hooks/use-resolve-fund-id-by-sec-code";
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
