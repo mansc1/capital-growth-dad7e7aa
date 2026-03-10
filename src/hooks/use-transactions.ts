@@ -53,6 +53,8 @@ export function useCreateTransaction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['holdings'] });
+      qc.invalidateQueries({ queryKey: ['portfolio_time_series'] });
+      qc.invalidateQueries({ queryKey: ['all_nav_history'] });
     },
   });
 }
