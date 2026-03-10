@@ -1,36 +1,96 @@
 
 
-# Manage Funds — Final Implementation Plan
+## Fix: Filter nav_history Queries by Fund IDs to Bypass Server 1000-Row Cap
 
-## Adjustment: sync-nav fund identity
+### Root Cause
+PostgREST enforces a hard `max_rows=1000` server-side. The `nav_history` table has 1206+ rows, so `.limit(10000)` has no effect — the server silently truncates at 1000 rows, dropping all NAV data after ~Feb 10.
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+### Fix: 3 files, filter nav_history by held fund IDs (~725 rows, under the cap)
 
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
+**File 1: `src/hooks/use-portfolio-time-series.ts`** (lines 10-24)
 
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
+Replace the parallel fetch with sequential:
+```ts
+// Sequential: need fund IDs before filtering nav_history
+const txRes = await supabase.from('transactions').select('*').order('trade_date');
+if (txRes.error) throw txRes.error;
 
-## Everything else — unchanged from approved plan
+const txData = (txRes.data || []).map(t => ({
+  ...t,
+  units: Number(t.units),
+  amount: Number(t.amount),
+  fee: Number(t.fee),
+}));
 
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+const fundIds = [...new Set(txData.map(t => t.fund_id))].sort();
+if (fundIds.length === 0) return [];
+
+const navRes = await supabase
+  .from('nav_history')
+  .select('*')
+  .in('fund_id', fundIds)
+  .order('nav_date', { ascending: true })
+  .limit(10000);
+if (navRes.error) throw navRes.error;
+const navData = navRes.data || [];
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+**File 2: `src/hooks/use-all-nav-history.ts`** (full rewrite)
 
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+Add `fundIds` parameter, use it in query key and filter:
+```ts
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import type { NavHistory, ChartRange } from '@/types/portfolio';
+import { subMonths } from 'date-fns';
+
+export function useAllNavHistory(range: ChartRange = 'ALL', fundIds?: string[]) {
+  return useQuery({
+    queryKey: ['all_nav_history', range, fundIds],
+    enabled: !fundIds || fundIds.length > 0,
+    queryFn: async () => {
+      let query = supabase
+        .from('nav_history')
+        .select('*')
+        .order('nav_date', { ascending: true });
+
+      if (fundIds?.length) {
+        query = query.in('fund_id', fundIds);
+      }
+
+      if (range !== 'ALL') {
+        const months = range === '1M' ? 1 : 3;
+        const from = subMonths(new Date(), months).toISOString().split('T')[0];
+        query = query.gte('nav_date', from);
+      }
+
+      const { data, error } = await query.limit(10000);
+      if (error) throw error;
+      return data as NavHistory[];
+    },
+  });
+}
+```
+
+**File 3: `src/pages/Dashboard.tsx`** (lines 25-26)
+
+Add sorted `heldFundIds` memo and pass to `useAllNavHistory`:
+```ts
+// After holdings hook (line 25), add:
+const heldFundIds = useMemo(() =>
+  (holdings ?? [])
+    .filter(h => h.total_units > 0)
+    .map(h => h.fund.id)
+    .sort(),
+  [holdings]
+);
+
+// Change line 26 from:
+const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange);
+// To:
+const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange, heldFundIds);
+```
+
+### What this fixes
+All three charts (Portfolio Value, Portfolio TWR, Fund Performance) receive complete nav_history data through the latest date instead of being truncated at row 1000. No changes to analytics/returns.ts, UI components, or schema.
 
