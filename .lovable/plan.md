@@ -1,36 +1,45 @@
 
 
-# Manage Funds — Final Implementation Plan
+## Fix: Trim Fund Detail NAV History to Start at First Transaction Date
 
-## Adjustment: sync-nav fund identity
+**Single file change:** `src/hooks/use-nav-history.ts`
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+### Change — `useNavHistory(fundId)` queryFn
 
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
+Make the queryFn sequential:
 
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
+1. First, fetch the earliest transaction date for the given fund
+2. Then, filter the `nav_history` query with `.gte('nav_date', firstTradeDate)` if a transaction exists
 
-## Everything else — unchanged from approved plan
+```ts
+queryFn: async () => {
+  let firstTradeDate: string | undefined;
+  if (fundId) {
+    const { data: firstTx } = await supabase
+      .from('transactions')
+      .select('trade_date')
+      .eq('fund_id', fundId)
+      .order('trade_date', { ascending: true })
+      .limit(1);
+    firstTradeDate = firstTx?.[0]?.trade_date;
+  }
 
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+  let query = supabase
+    .from('nav_history')
+    .select('*')
+    .order('nav_date', { ascending: true });
+
+  if (fundId) query = query.eq('fund_id', fundId);
+  if (firstTradeDate) query = query.gte('nav_date', firstTradeDate);
+
+  const { data, error } = await query.limit(10000);
+  if (error) throw error;
+  return data as NavHistory[];
+},
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
-
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+### What stays unchanged
+- `useLatestNavs()` — untouched
+- No UI, schema, or analytics changes
+- Dashboard charts unaffected (they use different hooks)
 
