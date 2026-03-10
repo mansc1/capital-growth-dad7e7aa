@@ -14,12 +14,13 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useActiveFunds } from "@/hooks/use-active-funds";
 import { useEnsureFund } from "@/hooks/use-ensure-fund";
+import { useHoldings } from "@/hooks/use-holdings";
 import { useNavForTradeDate } from "@/hooks/use-nav-for-trade-date";
 import { useResolveFundIdBySecCode } from "@/hooks/use-resolve-fund-id-by-sec-code";
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/use-transactions";
 import { formatNumber } from "@/lib/format";
 import { SecFundSearchPopover } from "@/components/funds/SecFundSearchPopover";
-import { supabase } from "@/integrations/supabase/client";
+
 import type { TransactionWithFund, TxType, DividendType } from "@/types/portfolio";
 import type { SecFundResult } from "@/hooks/use-sec-fund-search";
 
@@ -236,29 +237,10 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
   }, [editTransaction, open]);
 
-  // Get current units for sell validation — skip when pending fund
-  const [currentUnits, setCurrentUnits] = useState<number>(0);
-  useEffect(() => {
-    if (isSellType && watchFundId && !pendingSecFund) {
-      supabase
-        .from("transactions")
-        .select("fund_id, tx_type, units, dividend_type, trade_date")
-        .eq("fund_id", watchFundId)
-        .order("trade_date")
-        .then(({ data }) => {
-          if (data) {
-            let total = 0;
-            for (const tx of data) {
-              const u = Number(tx.units);
-              if (tx.tx_type === "buy" || tx.tx_type === "switch_in") total += u;
-              else if (tx.tx_type === "sell" || tx.tx_type === "switch_out") total -= u;
-              else if (tx.tx_type === "dividend" && tx.dividend_type === "reinvest") total += u;
-            }
-            setCurrentUnits(Math.max(0, total));
-          }
-        });
-    }
-  }, [isSellType, watchFundId, pendingSecFund]);
+  // Get current units for sell validation from holdings hook (single source of truth)
+  const { data: holdings } = useHoldings();
+  const currentHolding = holdings?.find(h => h.fund.id === watchFundId);
+  const currentUnits = currentHolding?.total_units ?? 0;
 
   function handleSecFundSelect(result: SecFundResult) {
     const norm = result.proj_abbr_name.trim().toUpperCase();
@@ -325,7 +307,9 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
       trade_date: values.trade_date,
       units: values.units,
       amount: values.amount,
-      nav_at_trade: values.nav_at_trade,
+      nav_at_trade: editTransaction
+        ? values.nav_at_trade
+        : (nav !== null && nav > 0) ? nav : 0,
       fee: values.fee,
       note: values.note || null,
       dividend_type: isDividend ? (values.dividend_type as DividendType) : null,
