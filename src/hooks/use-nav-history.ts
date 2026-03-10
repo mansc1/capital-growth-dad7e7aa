@@ -11,7 +11,7 @@ export function useNavHistory(fundId?: string) {
         .select('*')
         .order('nav_date', { ascending: true });
       if (fundId) query = query.eq('fund_id', fundId);
-      const { data, error } = await query;
+      const { data, error } = await query.limit(10000);
       if (error) throw error;
       return data as NavHistory[];
     },
