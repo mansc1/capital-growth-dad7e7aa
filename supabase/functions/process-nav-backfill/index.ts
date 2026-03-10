@@ -290,7 +290,15 @@ Deno.serve(async (req) => {
                   source: "sec_th_backfill",
                   fetched_at: now,
                 });
-              if (!insertErr) jobRowsInserted++;
+              if (!insertErr) {
+                jobRowsInserted++;
+                try {
+                  const wb = await writeBackPendingTransactions(supabase, fund.id, dateStr, navPerUnit);
+                  if (wb > 0) console.log(`[write-back] Updated ${wb} transaction(s) for fund=${fund.id} date=${dateStr}`);
+                } catch (wbErr) {
+                  console.warn(`[write-back] Failed for fund=${fund.id} date=${dateStr}:`, (wbErr as Error).message);
+                }
+              }
             }
           } catch (err) {
             console.error(`[process-backfill] Error on ${dateStr}:`, (err as Error).message);
