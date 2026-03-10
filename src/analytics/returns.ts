@@ -207,7 +207,8 @@ export function computeFundReturnSeries(
   navHistory: NavHistory[],
   heldFundIds: Set<string>,
   fundIdToCode: Map<string, string>,
-  startDate?: string
+  startDate?: string,
+  fundFirstTxDate?: Map<string, string>
 ): FundReturnSeriesResult {
   // Group NAV by fund_id, filter to held funds only
   const byFund = new Map<string, { date: string; nav: number }[]>();
@@ -215,6 +216,9 @@ export function computeFundReturnSeries(
   for (const row of navHistory) {
     if (!heldFundIds.has(row.fund_id)) continue;
     if (startDate && row.nav_date < startDate) continue;
+    // Skip NAV points before this fund's first transaction
+    const firstTx = fundFirstTxDate?.get(row.fund_id);
+    if (firstTx && row.nav_date < firstTx) continue;
 
     if (!byFund.has(row.fund_id)) byFund.set(row.fund_id, []);
     byFund.get(row.fund_id)!.push({ date: row.nav_date, nav: Number(row.nav_per_unit) });

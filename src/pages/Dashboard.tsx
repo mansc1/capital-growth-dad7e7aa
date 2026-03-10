@@ -4,6 +4,7 @@ import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { useHoldings } from "@/hooks/use-holdings";
 import { useAllNavHistory } from "@/hooks/use-all-nav-history";
 import { useLastSuccessfulSync } from "@/hooks/use-sync-runs";
+import { useTransactions } from "@/hooks/use-transactions";
 import { AppLayout } from "@/components/AppLayout";
 import { PortfolioChart } from "@/components/dashboard/PortfolioChart";
 import { PortfolioTWRChart } from "@/components/dashboard/PortfolioTWRChart";
@@ -24,7 +25,19 @@ export default function Dashboard() {
   const { data: holdings, isLoading: holdingsLoading } = useHoldings();
   const { data: navHistory, isLoading: navLoading } = useAllNavHistory(chartRange);
   const { lastSuccess } = useLastSuccessfulSync();
+  const { data: txData } = useTransactions();
   const navigate = useNavigate();
+
+  const fundFirstTxDate = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const tx of txData ?? []) {
+      const d = tx.trade_date;
+      if (!map.has(tx.fund_id) || d < map.get(tx.fund_id)!) {
+        map.set(tx.fund_id, d);
+      }
+    }
+    return map;
+  }, [txData]);
 
   const twrPct = useMemo(() => {
     if (!allSnapshots || allSnapshots.length < 2) return undefined;
@@ -111,6 +124,7 @@ export default function Dashboard() {
           holdings={holdings ?? []}
           isLoading={holdingsLoading || navLoading}
           range={chartRange}
+          fundFirstTxDate={fundFirstTxDate}
         />
 
         <StatCards

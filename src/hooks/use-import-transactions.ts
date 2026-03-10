@@ -214,6 +214,7 @@ export function useImportTransactions() {
         qc.invalidateQueries({ queryKey: ['holdings'] }),
         qc.invalidateQueries({ queryKey: ['portfolio_snapshots'] }),
         qc.invalidateQueries({ queryKey: ['all_nav_history'] }),
+        qc.invalidateQueries({ queryKey: ['portfolio_time_series'] }),
       ]);
 
       return { imported, fundsCreated, failed, warnings };
