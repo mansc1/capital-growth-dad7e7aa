@@ -94,7 +94,11 @@ export default function Transactions() {
                         <TableCell className="text-sm font-medium">{tx.funds?.fund_code ?? "—"}</TableCell>
                         <TableCell className="text-right tabular-nums text-sm">{formatNumber(Number(tx.units))}</TableCell>
                         <TableCell className="text-right tabular-nums text-sm">{formatCurrency(Number(tx.amount))}</TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">{formatNumber(Number(tx.nav_at_trade))}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {Number(tx.nav_at_trade) === 0
+                            ? <span className="italic text-muted-foreground">Updating…</span>
+                            : formatNumber(Number(tx.nav_at_trade))}
+                        </TableCell>
                         <TableCell className="text-right tabular-nums text-sm">{formatCurrency(Number(tx.fee))}</TableCell>
                         <TableCell className="text-right pr-6">
                           <div className="flex justify-end gap-1">
