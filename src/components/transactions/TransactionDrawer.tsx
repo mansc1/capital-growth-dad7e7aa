@@ -301,15 +301,24 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
       }
     }
 
+    const navToSave = editTransaction
+      ? values.nav_at_trade
+      : (nav !== null && nav > 0) ? nav : 0;
+
+    const isBuyTypeForUnits = values.tx_type === 'buy' || values.tx_type === 'switch_in';
+    const unitsToSave = editTransaction
+      ? values.units
+      : (isBuyTypeForUnits && navToSave > 0 && values.amount > 0)
+        ? values.amount / navToSave
+        : values.units;
+
     const payload = {
       fund_id: fundId,
       tx_type: values.tx_type as TxType,
       trade_date: values.trade_date,
-      units: values.units,
+      units: unitsToSave,
       amount: values.amount,
-      nav_at_trade: editTransaction
-        ? values.nav_at_trade
-        : (nav !== null && nav > 0) ? nav : 0,
+      nav_at_trade: navToSave,
       fee: values.fee,
       note: values.note || null,
       dividend_type: isDividend ? (values.dividend_type as DividendType) : null,
