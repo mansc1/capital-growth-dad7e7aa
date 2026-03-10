@@ -46,6 +46,8 @@ export function useNavSync() {
         queryClient.invalidateQueries({ queryKey: ["holdings"] }),
         queryClient.invalidateQueries({ queryKey: ["sync_runs"] }),
         queryClient.invalidateQueries({ queryKey: ["latest_navs"] }),
+        queryClient.invalidateQueries({ queryKey: ["portfolio_time_series"] }),
+        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
       ]);
 
       return result;

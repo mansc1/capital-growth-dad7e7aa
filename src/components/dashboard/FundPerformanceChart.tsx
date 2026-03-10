@@ -46,8 +46,8 @@ export function FundPerformanceChart({ navHistory, holdings, isLoading, range, f
     let startDate: string | undefined;
     if (range === '1M') startDate = subMonths(now, 1).toISOString().split('T')[0];
     else if (range === '3M') startDate = subMonths(now, 3).toISOString().split('T')[0];
-    return computeFundReturnSeries(navHistory, heldFundIds, fundIdToCode, startDate);
-  }, [navHistory, heldFundIds, fundIdToCode, range]);
+    return computeFundReturnSeries(navHistory, heldFundIds, fundIdToCode, startDate, fundFirstTxDate);
+  }, [navHistory, heldFundIds, fundIdToCode, range, fundFirstTxDate]);
 
   const toggleFund = (code: string) => {
     setHiddenFunds((prev) => {

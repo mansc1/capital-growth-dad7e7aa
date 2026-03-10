@@ -124,6 +124,7 @@ export default function Dashboard() {
           holdings={holdings ?? []}
           isLoading={holdingsLoading || navLoading}
           range={chartRange}
+          fundFirstTxDate={fundFirstTxDate}
         />
 
         <StatCards

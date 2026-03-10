@@ -70,6 +70,8 @@ export function useNavBackfill() {
         queryClient.invalidateQueries({ queryKey: ["holdings"] }),
         queryClient.invalidateQueries({ queryKey: ["latest_navs"] }),
         queryClient.invalidateQueries({ queryKey: ["backfill_queue_status"] }),
+        queryClient.invalidateQueries({ queryKey: ["portfolio_time_series"] }),
+        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
       ]);
 
       return { success: true, fundsEnqueued, fundsSkipped, processorResult };

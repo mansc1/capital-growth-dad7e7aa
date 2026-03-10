@@ -44,16 +44,17 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
         });
       }
 
-      // Collect all unique dates
-      const dateSet = new Set<string>();
-      for (const tx of txData) dateSet.add(tx.trade_date);
-      for (const row of navData) dateSet.add(row.nav_date);
+      // Collect transaction dates separately for start boundary
+      const txDates = txData.map(t => t.trade_date).sort();
+      if (txDates.length === 0) return [];
 
-      if (dateSet.size === 0) return [];
+      // Merge all dates for end boundary
+      const allDateSet = new Set<string>(txDates);
+      for (const row of navData) allDateSet.add(row.nav_date);
+      const sortedAll = Array.from(allDateSet).sort();
 
-      const sortedUnique = Array.from(dateSet).sort();
-      const startDateStr = sortedUnique[0];
-      const endDateStr = sortedUnique[sortedUnique.length - 1];
+      const startDateStr = txDates[0];                        // earliest transaction
+      const endDateStr = sortedAll[sortedAll.length - 1];     // latest of tx or nav
 
       // Generate continuous daily dates from start to end
       const allDates: string[] = [];
