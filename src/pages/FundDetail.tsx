@@ -16,6 +16,23 @@ import { format, parseISO } from "date-fns";
 import { ArrowLeft } from "lucide-react";
 import { computeFundReturnPeriods } from "@/analytics/returns";
 
+function normalizeRiskLevel(risk: number | null | undefined): number | null {
+  if (risk == null || risk < 1 || risk > 8) return null;
+  return risk;
+}
+
+function getRiskDotClass(risk: number | null): string {
+  if (risk === null) return "bg-gray-400";
+  if (risk <= 3) return "bg-green-500";
+  if (risk <= 5) return "bg-yellow-500";
+  if (risk <= 7) return "bg-orange-500";
+  return "bg-red-500";
+}
+
+function getRiskLabel(risk: number | null): string {
+  return risk !== null ? `Risk ${risk}/8` : "Risk —";
+}
+
 export default function FundDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
