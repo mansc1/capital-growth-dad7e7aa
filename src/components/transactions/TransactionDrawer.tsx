@@ -237,29 +237,10 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
     }
   }, [editTransaction, open]);
 
-  // Get current units for sell validation — skip when pending fund
-  const [currentUnits, setCurrentUnits] = useState<number>(0);
-  useEffect(() => {
-    if (isSellType && watchFundId && !pendingSecFund) {
-      supabase
-        .from("transactions")
-        .select("fund_id, tx_type, units, dividend_type, trade_date")
-        .eq("fund_id", watchFundId)
-        .order("trade_date")
-        .then(({ data }) => {
-          if (data) {
-            let total = 0;
-            for (const tx of data) {
-              const u = Number(tx.units);
-              if (tx.tx_type === "buy" || tx.tx_type === "switch_in") total += u;
-              else if (tx.tx_type === "sell" || tx.tx_type === "switch_out") total -= u;
-              else if (tx.tx_type === "dividend" && tx.dividend_type === "reinvest") total += u;
-            }
-            setCurrentUnits(Math.max(0, total));
-          }
-        });
-    }
-  }, [isSellType, watchFundId, pendingSecFund]);
+  // Get current units for sell validation from holdings hook (single source of truth)
+  const { data: holdings } = useHoldings();
+  const currentHolding = holdings?.find(h => h.fund.id === watchFundId);
+  const currentUnits = currentHolding?.total_units ?? 0;
 
   function handleSecFundSelect(result: SecFundResult) {
     const norm = result.proj_abbr_name.trim().toUpperCase();
