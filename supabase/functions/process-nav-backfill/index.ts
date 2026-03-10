@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { rebuildPortfolioSnapshotsForToday } from "../_shared/portfolio/rebuild-portfolio-snapshots.ts";
 import { loadFullSecDirectory } from "../_shared/nav/load-sec-directory.ts";
+import { writeBackPendingTransactions } from "../_shared/nav/write-back-pending-transactions.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
