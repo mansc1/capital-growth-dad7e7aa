@@ -498,32 +498,45 @@ export function TransactionDrawer({ open, onClose, editTransaction }: Props) {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="nav_at_trade"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>NAV at Trade</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.0001"
-                      {...field}
-                      value={field.value === 0 ? "" : field.value}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        const num = raw === "" ? 0 : Number(raw);
-                        field.onChange(Number.isNaN(num) ? 0 : num);
-                        setNavManuallyEdited(true);
-                        navWasAutoFilled.current = false;
-                      }}
-                    />
-                  </FormControl>
-                  {renderNavHelper()}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {editTransaction ? (
+              <FormField
+                control={form.control}
+                name="nav_at_trade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>NAV at Trade</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        {...field}
+                        value={field.value === 0 ? "" : field.value}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const num = raw === "" ? 0 : Number(raw);
+                          field.onChange(Number.isNaN(num) ? 0 : num);
+                          setNavManuallyEdited(true);
+                          navWasAutoFilled.current = false;
+                        }}
+                      />
+                    </FormControl>
+                    {renderNavHelper()}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">NAV at Trade</Label>
+                <div className="rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                  {navLoading || isResolving
+                    ? "Looking up NAV…"
+                    : nav !== null && nav > 0
+                      ? formatNumber(nav)
+                      : "Historical NAV will be fetched automatically after saving."}
+                </div>
+              </div>
+            )}
 
             {isDividend && (
               <div className="flex items-center gap-3">
