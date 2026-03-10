@@ -9,7 +9,7 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
     queryFn: async () => {
       const [txRes, navRes] = await Promise.all([
         supabase.from('transactions').select('*').order('trade_date'),
-        supabase.from('nav_history').select('*').order('nav_date', { ascending: true }),
+        supabase.from('nav_history').select('*').order('nav_date', { ascending: true }).limit(10000),
       ]);
 
       if (txRes.error) throw txRes.error;

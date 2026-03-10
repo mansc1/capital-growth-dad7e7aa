@@ -11,7 +11,7 @@ export function useNavHistory(fundId?: string) {
         .select('*')
         .order('nav_date', { ascending: true });
       if (fundId) query = query.eq('fund_id', fundId);
-      const { data, error } = await query;
+      const { data, error } = await query.limit(10000);
       if (error) throw error;
       return data as NavHistory[];
     },
@@ -27,7 +27,8 @@ export function useLatestNavs() {
         .from('nav_history')
         .select('fund_id, nav_per_unit, nav_date')
         .order('fund_id')
-        .order('nav_date', { ascending: false });
+        .order('nav_date', { ascending: false })
+        .limit(10000);
       if (error) throw error;
       
       // Get latest per fund
