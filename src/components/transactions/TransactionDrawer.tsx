@@ -35,7 +35,7 @@ const baseSchema = z.object({
   fund_id: z.string(),
   tx_type: z.enum(["buy", "sell", "dividend", "switch_in", "switch_out"]),
   trade_date: z.string().min(1, "Required"),
-  units: z.number().min(0.0001, "Must be positive"),
+  units: z.number().min(0),
   amount: z.number().min(0, "Must be non-negative"),
   // 0 = pending historical NAV backfill placeholder, not a real NAV value.
   // It satisfies the DB NOT NULL constraint while background backfill resolves the real NAV.
