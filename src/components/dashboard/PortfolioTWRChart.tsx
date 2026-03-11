@@ -5,7 +5,7 @@ import { formatPercent, formatCurrency, gainLossColor } from "@/lib/format";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
 import { format, parseISO } from "date-fns";
 import { computePortfolioTWRSeries } from "@/analytics/returns";
-import { subMonths } from "date-fns";
+import { rangeToStartDate } from "@/lib/chart-range";
 import type { PortfolioSnapshot, ChartRange } from "@/types/portfolio";
 import { TrendingUp } from "lucide-react";
 
