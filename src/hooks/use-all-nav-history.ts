@@ -17,9 +17,8 @@ export function useAllNavHistory(range: ChartRange = 'ALL', fundIds?: string[]) 
         query = query.in('fund_id', fundIds);
       }
 
-      if (range !== 'ALL') {
-        const months = range === '1M' ? 1 : 3;
-        const from = subMonths(new Date(), months).toISOString().split('T')[0];
+      const from = rangeToStartDate(range);
+      if (from) {
         query = query.gte('nav_date', from);
       }
 

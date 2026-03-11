@@ -19,9 +19,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ChartRange } from "@/types/portfolio";
 
 export default function Dashboard() {
-  const [chartRange, setChartRange] = useState<ChartRange>("ALL");
+  const [chartRange, setChartRange] = useState<ChartRange>("SINCE_START");
   const { data: snapshots, isLoading: snapshotsLoading } = usePortfolioTimeSeries(chartRange);
-  const { data: allSnapshots } = usePortfolioTimeSeries("ALL");
+  const { data: allSnapshots } = usePortfolioTimeSeries("SINCE_START");
   const { data: holdings, isLoading: holdingsLoading } = useHoldings();
 
   const heldFundIds = useMemo(() =>

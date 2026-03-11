@@ -12,9 +12,8 @@ export function usePortfolioSnapshots(range: ChartRange = 'ALL') {
         .select('*')
         .order('snapshot_date', { ascending: true });
 
-      if (range !== 'ALL') {
-        const months = range === '1M' ? 1 : 3;
-        const from = subMonths(new Date(), months).toISOString().split('T')[0];
+      const from = rangeToStartDate(range);
+      if (from) {
         query = query.gte('snapshot_date', from);
       }
 

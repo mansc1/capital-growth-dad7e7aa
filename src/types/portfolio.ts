@@ -83,4 +83,4 @@ export interface PerformanceReturn {
   return_pct: number | null;
 }
 
-export type ChartRange = '1M' | '3M' | 'ALL';
+export type ChartRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'SINCE_START';

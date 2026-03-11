@@ -51,10 +51,10 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
               key={r}
               variant={range === r ? "default" : "ghost"}
               size="sm"
-              className="h-7 px-3 text-xs"
+              className="h-7 px-2 text-xs"
               onClick={() => onRangeChange(r)}
             >
-              {r}
+              {rangeLabel(r)}
             </Button>
           ))}
         </div>

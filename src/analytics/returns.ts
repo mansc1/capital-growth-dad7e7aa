@@ -51,17 +51,9 @@ export function computePortfolioTWR(
  */
 export function computePortfolioTWRForRange(
   snapshots: PortfolioSnapshot[],
-  range: '1M' | '3M' | 'ALL'
+  range: ChartRange
 ): { totalReturnPct: number } {
-  const now = new Date();
-  let startDate: string | undefined;
-
-  if (range === '1M') {
-    startDate = subMonths(now, 1).toISOString().split('T')[0];
-  } else if (range === '3M') {
-    startDate = subMonths(now, 3).toISOString().split('T')[0];
-  }
-
+  const startDate = rangeToStartDate(range) ?? undefined;
   return computePortfolioTWR(snapshots, startDate);
 }
 

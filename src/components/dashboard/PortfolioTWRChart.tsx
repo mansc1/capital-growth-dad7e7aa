@@ -18,11 +18,7 @@ interface Props {
 export function PortfolioTWRChart({ snapshots, isLoading, range }: Props) {
   const series = useMemo(() => {
     if (!snapshots || snapshots.length < 2) return [];
-    const now = new Date();
-    let startDate: string | undefined;
-    if (range === '1M') startDate = subMonths(now, 1).toISOString().split('T')[0];
-    else if (range === '3M') startDate = subMonths(now, 3).toISOString().split('T')[0];
-    return computePortfolioTWRSeries(snapshots, startDate);
+    return computePortfolioTWRSeries(snapshots, rangeToStartDate(range) ?? undefined);
   }, [snapshots, range]);
 
   if (isLoading) {
