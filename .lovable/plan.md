@@ -1,36 +1,46 @@
 
 
-# Manage Funds — Final Implementation Plan
+## Refactor Dashboard Metrics into "Portfolio Snapshot" Card
 
-## Adjustment: sync-nav fund identity
+### Changes
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+**1. Create `src/components/dashboard/PortfolioSnapshotCard.tsx`**
 
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
+Single Card with three sections:
 
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
+- **Hero**: Total Value in `text-3xl font-bold`, "Current Portfolio Value" label below
+- **Middle row** (2-col grid, separated by a Separator): Total Cost | Unrealized Gain (gain/loss colored)
+- **Bottom row** (2-col grid): MWR with tooltip | TWR with tooltip (gain/loss colored, "—" fallback for TWR)
+- Loading state: single Card with skeleton placeholders
+- Uses existing `formatCurrency`, `formatPercent`, `gainLossColor` from `@/lib/format`
+- Preserves Info tooltips for MWR/TWR from current StatCards
 
-## Everything else — unchanged from approved plan
-
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+Props:
+```ts
+interface Props {
+  totalValue: number;
+  totalCost: number;
+  unrealizedGain: number;
+  mwr: number;
+  twr?: number;
+  isLoading: boolean;
+}
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+**2. Update `src/pages/Dashboard.tsx`**
 
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+- Replace `StatCards` import with `PortfolioSnapshotCard`
+- Replace lines 139-146 with:
+```tsx
+<PortfolioSnapshotCard
+  totalValue={totalValue}
+  totalCost={totalCost}
+  unrealizedGain={totalGainLoss}
+  mwr={totalReturnPct}
+  twr={twrPct}
+  isLoading={holdingsLoading}
+/>
+```
+
+No other files changed. No analytics/hooks modifications.
 
