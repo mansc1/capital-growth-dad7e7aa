@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PortfolioSnapshot, ChartRange } from '@/types/portfolio';
-import { subMonths } from 'date-fns';
+import { rangeToStartDate } from '@/lib/chart-range';
 
 export function usePortfolioSnapshots(range: ChartRange = 'ALL') {
   return useQuery({
