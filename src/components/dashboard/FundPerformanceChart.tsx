@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatPercent, gainLossColor } from "@/lib/format";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, Legend } from "recharts";
 import { format, parseISO } from "date-fns";
-import { subMonths } from "date-fns";
+import { rangeToStartDate } from "@/lib/chart-range";
 import { computeFundReturnSeries } from "@/analytics/returns";
 import type { NavHistory, Holding, ChartRange } from "@/types/portfolio";
 import { BarChart3 } from "lucide-react";
