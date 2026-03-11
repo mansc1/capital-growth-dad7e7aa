@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { PortfolioSnapshot, ChartRange } from '@/types/portfolio';
 import { rangeToStartDate } from '@/lib/chart-range';
 
-export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
+export function usePortfolioTimeSeries(range: ChartRange = 'SINCE_START') {
   return useQuery({
     queryKey: ['portfolio_time_series', range],
     queryFn: async () => {

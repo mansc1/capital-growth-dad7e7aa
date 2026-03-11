@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { NavHistory, ChartRange } from '@/types/portfolio';
 import { rangeToStartDate } from '@/lib/chart-range';
 
-export function useAllNavHistory(range: ChartRange = 'ALL', fundIds?: string[]) {
+export function useAllNavHistory(range: ChartRange = 'SINCE_START', fundIds?: string[]) {
   return useQuery({
     queryKey: ['all_nav_history', range, fundIds],
     enabled: !fundIds || fundIds.length > 0,
