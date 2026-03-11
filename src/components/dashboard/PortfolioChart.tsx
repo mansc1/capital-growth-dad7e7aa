@@ -7,8 +7,9 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as Recharts
 import type { PortfolioSnapshot, ChartRange } from "@/types/portfolio";
 import { format, parseISO } from "date-fns";
 import { computeDailyReturns } from "@/analytics/returns";
+import { rangeLabel } from "@/lib/chart-range";
 
-const ranges: ChartRange[] = ["1M", "3M", "ALL"];
+const ranges: ChartRange[] = ["1M", "3M", "6M", "YTD", "1Y", "SINCE_START"];
 
 interface Props {
   snapshots: PortfolioSnapshot[];
