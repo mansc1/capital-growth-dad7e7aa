@@ -9,7 +9,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { PortfolioChart } from "@/components/dashboard/PortfolioChart";
 import { PortfolioTWRChart } from "@/components/dashboard/PortfolioTWRChart";
 import { FundPerformanceChart } from "@/components/dashboard/FundPerformanceChart";
-import { StatCards } from "@/components/dashboard/StatCards";
+import { PortfolioSnapshotCard } from "@/components/dashboard/PortfolioSnapshotCard";
 import { AllocationChart } from "@/components/dashboard/AllocationChart";
 import { HoldingsSummaryTable } from "@/components/dashboard/HoldingsSummaryTable";
 import { Button } from "@/components/ui/button";
