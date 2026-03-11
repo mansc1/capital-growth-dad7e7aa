@@ -9,7 +9,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { PortfolioChart } from "@/components/dashboard/PortfolioChart";
 import { PortfolioTWRChart } from "@/components/dashboard/PortfolioTWRChart";
 import { FundPerformanceChart } from "@/components/dashboard/FundPerformanceChart";
-import { StatCards } from "@/components/dashboard/StatCards";
+import { PortfolioSnapshotCard } from "@/components/dashboard/PortfolioSnapshotCard";
 import { AllocationChart } from "@/components/dashboard/AllocationChart";
 import { HoldingsSummaryTable } from "@/components/dashboard/HoldingsSummaryTable";
 import { Button } from "@/components/ui/button";
@@ -136,12 +136,12 @@ export default function Dashboard() {
           fundFirstTxDate={fundFirstTxDate}
         />
 
-        <StatCards
-          totalCost={totalCost}
+        <PortfolioSnapshotCard
           totalValue={totalValue}
-          gainLoss={totalGainLoss}
-          returnPct={totalReturnPct}
-          twrPct={twrPct}
+          totalCost={totalCost}
+          unrealizedGain={totalGainLoss}
+          mwr={totalReturnPct}
+          twr={twrPct}
           isLoading={holdingsLoading}
         />
 
