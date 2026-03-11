@@ -1,5 +1,6 @@
-import type { PortfolioSnapshot, NavHistory } from '@/types/portfolio';
+import type { PortfolioSnapshot, NavHistory, ChartRange } from '@/types/portfolio';
 import { subMonths } from 'date-fns';
+import { rangeToStartDate } from '@/lib/chart-range';
 
 /**
  * Compute Time-Weighted Return (TWR) for the portfolio from snapshots.
