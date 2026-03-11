@@ -1,36 +1,55 @@
 
 
-# Manage Funds — Final Implementation Plan
+## Extend Chart Range Selector with Additional Timeframes
 
-## Adjustment: sync-nav fund identity
+### Summary
 
-The current sync-nav uses `codeToId` (fund_code → fund_id) to map provider results back. The plan replaces this with a per-fund iteration approach that avoids any reverse lookup map:
+Add `6M`, `YTD`, `1Y`, and `SINCE_START` ranges alongside existing `1M` and `3M`. Replace `ALL` with `SINCE_START`. This touches the type definition, a shared range-to-date helper, and all consumers.
 
-**New sync-nav flow:**
-1. Select `id, fund_code, sec_fund_code` from active funds
-2. For each fund, compute `lookupCode = fund.sec_fund_code ?? fund.fund_code`
-3. Collect all unique lookup codes, pass to provider's `fetchLatestNavForFunds(lookupCodes)`
-4. When processing results, iterate over the **original fund records** — for each fund, find the matching result using that fund's own `lookupCode`. This keeps identity tied to the fund record, not a reverse map
-5. Use `fund.id` directly for all nav_history operations
+### Changes
 
-This avoids collisions if two funds share the same lookup code — each fund record drives its own processing.
-
-## Everything else — unchanged from approved plan
-
-### Migration
-```sql
-ALTER TABLE public.funds ADD COLUMN sec_fund_code text;
+**1. `src/types/portfolio.ts`** — Update type:
+```ts
+export type ChartRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'SINCE_START';
 ```
 
-### New files
-- **`src/hooks/use-fund-mutations.ts`** — CRUD mutations invalidating `['funds']`, `['holdings']`, `['holdings', true]`
-- **`src/components/funds/FundDrawer.tsx`** — Sheet form for Add/Edit with Zod validation; warns on fund_code change if fund has history
-- **`src/components/funds/ArchiveConfirmDialog.tsx`** — AlertDialog with extra warning when fund has active holdings
-- **`src/pages/ManageFunds.tsx`** — Table with search, status tabs (Active/Archived/All), Edit/Archive/Restore actions, empty states
+**2. Create `src/lib/chart-range.ts`** — Shared helper to avoid duplicating logic in 6 places:
+```ts
+import { subMonths, subYears, startOfYear } from 'date-fns';
 
-### Modified files
-- **`src/types/portfolio.ts`** — Add `sec_fund_code: string | null` to Fund
-- **`src/App.tsx`** — Add `/funds/manage` route before `/funds/:id`
-- **`src/components/AppSidebar.tsx`** — Add "Manage Funds" nav item (FolderCog icon) after Transactions
-- **`supabase/functions/sync-nav/index.ts`** — Select sec_fund_code, per-fund lookup code resolution, no reverse map
+export function rangeToStartDate(range: ChartRange): string | null {
+  const now = new Date();
+  switch (range) {
+    case '1M': return subMonths(now, 1).toISOString().split('T')[0];
+    case '3M': return subMonths(now, 3).toISOString().split('T')[0];
+    case '6M': return subMonths(now, 6).toISOString().split('T')[0];
+    case 'YTD': return startOfYear(now).toISOString().split('T')[0];
+    case '1Y': return subYears(now, 1).toISOString().split('T')[0];
+    case 'SINCE_START': return null;
+  }
+}
+
+export function rangeLabel(range: ChartRange): string {
+  return range === 'SINCE_START' ? 'Since Start' : range;
+}
+```
+
+**3. Update consumers** — Replace inline `range === '1M' ? 1 : 3` logic with `rangeToStartDate(range)`:
+
+- `src/hooks/use-portfolio-time-series.ts` (line 77-79)
+- `src/hooks/use-all-nav-history.ts` (line 20-22)
+- `src/hooks/use-portfolio-snapshots.ts` (line 15-17)
+- `src/analytics/returns.ts` — `computePortfolioTWRForRange` (line 53 type + lines 58-62)
+- `src/components/dashboard/PortfolioTWRChart.tsx` (lines 22-24)
+- `src/components/dashboard/FundPerformanceChart.tsx` (lines 47-48)
+
+**4. `src/components/dashboard/PortfolioChart.tsx`** — Update ranges array and button rendering:
+```ts
+const ranges: ChartRange[] = ["1M", "3M", "6M", "YTD", "1Y", "SINCE_START"];
+// Button label: rangeLabel(r) instead of r
+```
+
+**5. `src/pages/Dashboard.tsx`** — Change default from `"ALL"` to `"SINCE_START"`, and update the `usePortfolioTimeSeries("ALL")` call to `"SINCE_START"`.
+
+No changes to analytics calculations, portfolio computation, or data fetching hook structure.
 
