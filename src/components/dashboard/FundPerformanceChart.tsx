@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatPercent, gainLossColor } from "@/lib/format";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, Legend } from "recharts";
 import { format, parseISO } from "date-fns";
-import { subMonths } from "date-fns";
+import { rangeToStartDate } from "@/lib/chart-range";
 import { computeFundReturnSeries } from "@/analytics/returns";
 import type { NavHistory, Holding, ChartRange } from "@/types/portfolio";
 import { BarChart3 } from "lucide-react";
@@ -42,11 +42,7 @@ export function FundPerformanceChart({ navHistory, holdings, isLoading, range, f
 
   const { data: chartData, fundCodes } = useMemo(() => {
     if (!navHistory.length || !heldFundIds.size) return { data: [], fundCodes: [] };
-    const now = new Date();
-    let startDate: string | undefined;
-    if (range === '1M') startDate = subMonths(now, 1).toISOString().split('T')[0];
-    else if (range === '3M') startDate = subMonths(now, 3).toISOString().split('T')[0];
-    return computeFundReturnSeries(navHistory, heldFundIds, fundIdToCode, startDate, fundFirstTxDate);
+    return computeFundReturnSeries(navHistory, heldFundIds, fundIdToCode, rangeToStartDate(range) ?? undefined, fundFirstTxDate);
   }, [navHistory, heldFundIds, fundIdToCode, range, fundFirstTxDate]);
 
   const toggleFund = (code: string) => {

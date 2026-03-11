@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PortfolioSnapshot, ChartRange } from '@/types/portfolio';
-import { subMonths } from 'date-fns';
+import { rangeToStartDate } from '@/lib/chart-range';
 
-export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
+export function usePortfolioTimeSeries(range: ChartRange = 'SINCE_START') {
   return useQuery({
     queryKey: ['portfolio_time_series', range],
     queryFn: async () => {
@@ -73,11 +73,7 @@ export function usePortfolioTimeSeries(range: ChartRange = 'ALL') {
       }
 
       // Compute range start
-      let rangeStart: string | null = null;
-      if (range !== 'ALL') {
-        const months = range === '1M' ? 1 : 3;
-        rangeStart = subMonths(new Date(), months).toISOString().split('T')[0];
-      }
+      const rangeStart = rangeToStartDate(range);
 
       // Walk dates
       const fundState = new Map<string, { units: number; cost: number; lastKnownNav: number | null }>();

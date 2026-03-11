@@ -7,8 +7,9 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as Recharts
 import type { PortfolioSnapshot, ChartRange } from "@/types/portfolio";
 import { format, parseISO } from "date-fns";
 import { computeDailyReturns } from "@/analytics/returns";
+import { rangeLabel } from "@/lib/chart-range";
 
-const ranges: ChartRange[] = ["1M", "3M", "ALL"];
+const ranges: ChartRange[] = ["1M", "3M", "6M", "YTD", "1Y", "SINCE_START"];
 
 interface Props {
   snapshots: PortfolioSnapshot[];
@@ -50,10 +51,10 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
               key={r}
               variant={range === r ? "default" : "ghost"}
               size="sm"
-              className="h-7 px-3 text-xs"
+              className="h-7 px-2 text-xs"
               onClick={() => onRangeChange(r)}
             >
-              {r}
+              {rangeLabel(r)}
             </Button>
           ))}
         </div>

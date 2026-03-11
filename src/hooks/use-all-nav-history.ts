@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { NavHistory, ChartRange } from '@/types/portfolio';
-import { subMonths } from 'date-fns';
+import { rangeToStartDate } from '@/lib/chart-range';
 
-export function useAllNavHistory(range: ChartRange = 'ALL', fundIds?: string[]) {
+export function useAllNavHistory(range: ChartRange = 'SINCE_START', fundIds?: string[]) {
   return useQuery({
     queryKey: ['all_nav_history', range, fundIds],
     enabled: !fundIds || fundIds.length > 0,
@@ -17,9 +17,8 @@ export function useAllNavHistory(range: ChartRange = 'ALL', fundIds?: string[]) 
         query = query.in('fund_id', fundIds);
       }
 
-      if (range !== 'ALL') {
-        const months = range === '1M' ? 1 : 3;
-        const from = subMonths(new Date(), months).toISOString().split('T')[0];
+      const from = rangeToStartDate(range);
+      if (from) {
         query = query.gte('nav_date', from);
       }
 
