@@ -136,12 +136,12 @@ export default function Dashboard() {
           fundFirstTxDate={fundFirstTxDate}
         />
 
-        <StatCards
-          totalCost={totalCost}
+        <PortfolioSnapshotCard
           totalValue={totalValue}
-          gainLoss={totalGainLoss}
-          returnPct={totalReturnPct}
-          twrPct={twrPct}
+          totalCost={totalCost}
+          unrealizedGain={totalGainLoss}
+          mwr={totalReturnPct}
+          twr={twrPct}
           isLoading={holdingsLoading}
         />
 
