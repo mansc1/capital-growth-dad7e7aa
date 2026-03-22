@@ -50,7 +50,7 @@ export function HoldingsSummaryTable({ holdings, isLoading }: Props) {
                 <TableRow key={h.fund.id}>
                   <TableCell className="pl-6">
                     <p className="font-medium text-sm">{h.fund.fund_code}</p>
-                    <p className="text-xs text-muted-foreground">{h.fund.asset_class}</p>
+                    <p className="text-xs text-muted-foreground">{h.fund.asset_class ?? "—"}</p>
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-sm">
                     {formatCurrency(h.market_value)}

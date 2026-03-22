@@ -73,7 +73,7 @@ export default function Holdings() {
                           <TableCell className="text-sm">{h.fund.amc_name}</TableCell>
                           <TableCell>
                             <Badge variant="secondary" className="text-xs font-normal">
-                              {h.fund.asset_class}
+                              {h.fund.asset_class ?? "—"}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-sm">{formatNumber(h.total_units)}</TableCell>

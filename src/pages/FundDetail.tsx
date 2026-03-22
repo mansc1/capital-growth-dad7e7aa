@@ -16,6 +16,18 @@ import { format, parseISO } from "date-fns";
 import { ArrowLeft } from "lucide-react";
 import { computeFundReturnPeriods } from "@/analytics/returns";
 
+function normalizeRiskLevel(risk: number | null | undefined): number | null {
+  if (risk == null || risk < 1 || risk > 8) return null;
+  return risk;
+}
+function getRiskDotClass(risk: number | null): string {
+  if (risk === null) return "bg-gray-400";
+  if (risk <= 3) return "bg-green-500";
+  if (risk <= 5) return "bg-yellow-500";
+  if (risk <= 7) return "bg-orange-500";
+  return "bg-red-500";
+}
+
 export default function FundDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -87,8 +99,13 @@ export default function FundDetail() {
         <Card>
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-3">
-              <Badge variant="secondary">{fund.asset_class}</Badge>
-              <Badge variant="outline">Risk {fund.risk_level}/8</Badge>
+              <Badge variant="secondary">{fund.asset_class ?? "—"}</Badge>
+              <Badge variant="outline" className="flex items-center gap-1.5">
+                <span className={`inline-block h-2 w-2 rounded-full ${getRiskDotClass(normalizeRiskLevel(fund.risk_level))}`} />
+                {fund.risk_level != null && fund.risk_level >= 1 && fund.risk_level <= 8
+                  ? `Risk ${fund.risk_level}/8`
+                  : "Risk —"}
+              </Badge>
               <Badge variant={fund.is_active ? "default" : "destructive"}>
                 {fund.is_active ? "Active" : "Inactive"}
               </Badge>
@@ -139,7 +156,15 @@ export default function FundDetail() {
         {/* NAV chart */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">NAV History</CardTitle>
+            <div className="flex items-center justify-between w-full">
+              <CardTitle className="text-sm font-medium">NAV History</CardTitle>
+              {navHistory && navHistory.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Latest: {Number(navHistory[navHistory.length - 1].nav_per_unit).toFixed(4)}
+                  {" "}({formatDate(navHistory[navHistory.length - 1].nav_date)})
+                </p>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {navLoading ? (
@@ -217,9 +242,17 @@ export default function FundDetail() {
                           {tx.tx_type.replace("_", " ")}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums text-sm">{formatNumber(Number(tx.units))}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">
+                        {Number(tx.units) === 0
+                          ? <span className="italic text-muted-foreground text-xs">Pending</span>
+                          : formatNumber(Number(tx.units))}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{formatCurrency(Number(tx.amount))}</TableCell>
-                      <TableCell className="text-right tabular-nums text-sm pr-6">{formatNumber(Number(tx.nav_at_trade))}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm pr-6">
+                        {Number(tx.nav_at_trade) === 0
+                          ? <span className="italic text-muted-foreground text-xs">Updating…</span>
+                          : formatNumber(Number(tx.nav_at_trade))}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
