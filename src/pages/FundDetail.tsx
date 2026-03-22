@@ -99,8 +99,13 @@ export default function FundDetail() {
         <Card>
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-3">
-              <Badge variant="secondary">{fund.asset_class}</Badge>
-              <Badge variant="outline">Risk {fund.risk_level}/8</Badge>
+              <Badge variant="secondary">{fund.asset_class ?? "—"}</Badge>
+              <Badge variant="outline" className="flex items-center gap-1.5">
+                <span className={`inline-block h-2 w-2 rounded-full ${getRiskDotClass(normalizeRiskLevel(fund.risk_level))}`} />
+                {fund.risk_level != null && fund.risk_level >= 1 && fund.risk_level <= 8
+                  ? `Risk ${fund.risk_level}/8`
+                  : "Risk —"}
+              </Badge>
               <Badge variant={fund.is_active ? "default" : "destructive"}>
                 {fund.is_active ? "Active" : "Inactive"}
               </Badge>
