@@ -156,7 +156,15 @@ export default function FundDetail() {
         {/* NAV chart */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">NAV History</CardTitle>
+            <div className="flex items-center justify-between w-full">
+              <CardTitle className="text-sm font-medium">NAV History</CardTitle>
+              {navHistory && navHistory.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Latest: {Number(navHistory[navHistory.length - 1].nav_per_unit).toFixed(4)}
+                  {" "}({formatDate(navHistory[navHistory.length - 1].nav_date)})
+                </p>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {navLoading ? (
