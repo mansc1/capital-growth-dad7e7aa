@@ -242,9 +242,17 @@ export default function FundDetail() {
                           {tx.tx_type.replace("_", " ")}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums text-sm">{formatNumber(Number(tx.units))}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">
+                        {Number(tx.units) === 0
+                          ? <span className="italic text-muted-foreground text-xs">Pending</span>
+                          : formatNumber(Number(tx.units))}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{formatCurrency(Number(tx.amount))}</TableCell>
-                      <TableCell className="text-right tabular-nums text-sm pr-6">{formatNumber(Number(tx.nav_at_trade))}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm pr-6">
+                        {Number(tx.nav_at_trade) === 0
+                          ? <span className="italic text-muted-foreground text-xs">Updating…</span>
+                          : formatNumber(Number(tx.nav_at_trade))}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
