@@ -1,4 +1,6 @@
+import { useMemo } from "react";
 import { useHoldings } from "@/hooks/use-holdings";
+import { useHoldingsSparklines } from "@/hooks/use-holdings-sparklines";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -8,10 +10,17 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatPercent, formatNumber, gainLossColor } from "@/lib/format";
 import { useNavigate } from "react-router-dom";
 import { Briefcase, Plus } from "lucide-react";
+import { NavSparkline } from "@/components/holdings/NavSparkline";
 
 export default function Holdings() {
   const { data: holdings, isLoading } = useHoldings();
   const navigate = useNavigate();
+
+  const heldFundIds = useMemo(
+    () => (holdings ?? []).filter(h => h.total_units > 0).map(h => h.fund.id),
+    [holdings]
+  );
+  const { data: sparklines } = useHoldingsSparklines(heldFundIds);
 
   return (
     <AppLayout>
@@ -35,7 +44,7 @@ export default function Holdings() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="pl-6">Fund</TableHead>
-                      <TableHead>AMC</TableHead>
+                      <TableHead>Trend</TableHead>
                       <TableHead>Asset Class</TableHead>
                       <TableHead className="text-right">Units</TableHead>
                       <TableHead className="text-right">Avg Cost</TableHead>
@@ -59,10 +68,7 @@ export default function Holdings() {
                         >
                           <TableCell className="pl-6">
                             <div className="flex items-center gap-2">
-                              <div>
-                                <p className="font-medium text-sm">{h.fund.fund_code}</p>
-                                <p className="text-xs text-muted-foreground max-w-[180px] truncate">{h.fund.fund_name}</p>
-                              </div>
+                              <p className="font-medium text-sm">{h.fund.fund_code}</p>
                               {isWaiting && (
                                 <Badge variant="secondary" className="text-xs font-normal text-amber-600 bg-amber-100 border-amber-200">
                                   Updating NAV…
@@ -70,7 +76,9 @@ export default function Holdings() {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="text-sm">{h.fund.amc_name}</TableCell>
+                          <TableCell>
+                            <NavSparkline data={sparklines?.[h.fund.id] ?? []} />
+                          </TableCell>
                           <TableCell>
                             <Badge variant="secondary" className="text-xs font-normal">
                               {h.fund.asset_class ?? "—"}
