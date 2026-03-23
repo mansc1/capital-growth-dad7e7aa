@@ -215,7 +215,26 @@ export default function FundDetail() {
                         );
                       }}
                     />
-                    <Area type="monotone" dataKey="nav" stroke="hsl(var(--chart-2))" strokeWidth={2} fill="url(#navGrad)" />
+                    <Area
+                      type="monotone"
+                      dataKey="nav"
+                      stroke="hsl(var(--chart-2))"
+                      strokeWidth={2}
+                      fill="url(#navGrad)"
+                      dot={(props: any) => {
+                        const { cx, cy, payload } = props;
+                        if (!payload.has_transaction) return <g />;
+                        return (
+                          <circle
+                            cx={cx} cy={cy} r={3}
+                            fill="hsl(var(--chart-2))"
+                            stroke="hsl(var(--background))"
+                            strokeWidth={1.5}
+                          />
+                        );
+                      }}
+                      activeDot={{ r: 4, strokeWidth: 2 }}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
