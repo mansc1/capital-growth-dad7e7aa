@@ -1,80 +1,81 @@
 
 
-## Add Transaction Markers to Fund Detail NAV History Chart
+## Refactor Holdings Table with NAV Sparklines
 
-**File:** `src/pages/FundDetail.tsx`
+### Changes
 
-### Change 1 — Enrich chartData with transaction info (line 64-67)
+**1. Create `src/components/holdings/NavSparkline.tsx`** — Tiny SVG sparkline component
 
-Build a Set of transaction dates, then annotate each NAV point:
+- Pure SVG, no Recharts overhead
+- Props: `data: number[]` (NAV values), fixed width 100px, height 32px
+- Renders a single polyline with `stroke: hsl(var(--muted-foreground))`, `strokeWidth: 1.5`, rounded joins, no fill
+- If `data.length < 2`, render `<span className="text-muted-foreground text-xs">—</span>`
+- No axes, dots, tooltips, labels, or grid
+
+```tsx
+function NavSparkline({ data }: { data: number[] }) {
+  if (data.length < 2) return <span className="text-xs text-muted-foreground">—</span>;
+  const w = 100, h = 32, pad = 2;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const points = data.map((v, i) =>
+    `${pad + (i / (data.length - 1)) * (w - 2 * pad)},${pad + (1 - (v - min) / range) * (h - 2 * pad)}`
+  ).join(' ');
+  return (
+    <svg width={w} height={h} className="block">
+      <polyline points={points} fill="none" stroke="hsl(var(--muted-foreground))"
+        strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+```
+
+**2. Create `src/hooks/use-holdings-sparklines.ts`** — Single query for all held funds, last 90 days
 
 ```ts
-const txDates = useMemo(() => {
-  const map = new Map<string, number>();
-  for (const tx of transactions ?? []) {
-    map.set(tx.trade_date, (map.get(tx.trade_date) ?? 0) + 1);
-  }
-  return map;
-}, [transactions]);
-
-const chartData = (navHistory ?? []).map((n) => ({
-  date: n.nav_date,
-  nav: Number(n.nav_per_unit),
-  has_transaction: txDates.has(n.nav_date),
-  tx_count: txDates.get(n.nav_date) ?? 0,
-}));
+export function useHoldingsSparklines(fundIds: string[]) {
+  const sortedIds = useMemo(() => [...fundIds].sort(), [fundIds]);
+  return useQuery({
+    queryKey: ['holdings_sparklines', sortedIds],
+    enabled: sortedIds.length > 0,
+    queryFn: async () => {
+      const from = subDays(new Date(), 90).toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('nav_history')
+        .select('fund_id, nav_per_unit, nav_date')
+        .in('fund_id', sortedIds)
+        .gte('nav_date', from)
+        .order('nav_date', { ascending: true })
+        .limit(5000);
+      if (error) throw error;
+      // Group by fund_id → number[]
+      const map: Record<string, number[]> = {};
+      for (const r of data || []) {
+        (map[r.fund_id] ??= []).push(Number(r.nav_per_unit));
+      }
+      return map;
+    },
+  });
+}
 ```
 
-### Change 2 — Update tooltip to show tx count (lines 191-201)
+One query total, filtered by fund IDs + date. Returns `Record<fund_id, number[]>`.
 
-Match Portfolio Value tooltip style, adding transaction count:
+**3. Update `src/pages/Holdings.tsx`**
 
-```tsx
-<RechartsTooltip
-  content={({ active, payload }) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0].payload;
-    return (
-      <div className="rounded-lg border bg-card px-3 py-2 shadow-md">
-        <p className="text-xs text-muted-foreground">{format(parseISO(d.date), "d MMM yyyy")}</p>
-        <p className="text-sm font-semibold">{Number(d.nav).toFixed(4)}</p>
-        {d.tx_count > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Transactions: {d.tx_count}
-          </p>
-        )}
-      </div>
-    );
-  }}
-/>
-```
+- Import `NavSparkline` and `useHoldingsSparklines`
+- Derive `heldFundIds` from holdings with `useMemo`
+- Call `useHoldingsSparklines(heldFundIds)`
+- Remove line 64 (fund subtitle `<p>` with `fund_name`)
+- Remove AMC `<TableHead>` (line 38) and `<TableCell>` (line 73)
+- Add `Trend` column header after Fund
+- Add sparkline cell: `<NavSparkline data={sparklines?.[h.fund.id] ?? []} />`
 
-### Change 3 — Add dot renderer + activeDot to Area (line 203)
+Final column order: Fund | Trend | Asset Class | Units | Avg Cost | Latest NAV | Market Value | Gain/Loss | Return | Alloc.
 
-Replace the plain `<Area>` with transaction markers matching Portfolio Value:
-
-```tsx
-<Area
-  type="monotone"
-  dataKey="nav"
-  stroke="hsl(var(--chart-2))"
-  strokeWidth={2}
-  fill="url(#navGrad)"
-  dot={(props: any) => {
-    const { cx, cy, payload } = props;
-    if (!payload.has_transaction) return <g />;
-    return (
-      <circle
-        cx={cx} cy={cy} r={3}
-        fill="hsl(var(--chart-2))"
-        stroke="hsl(var(--background))"
-        strokeWidth={1.5}
-      />
-    );
-  }}
-  activeDot={{ r: 4, strokeWidth: 2 }}
-/>
-```
-
-Uses `--chart-2` (the existing NAV chart color) instead of `--chart-1` (portfolio color). Same marker size, stroke, and hover behavior.
+### What stays unchanged
+- `use-holdings.ts` — no changes
+- Holdings calculations, gain/loss, allocation logic
+- Fund Detail page (still shows full name, AMC, full NAV chart)
+- Dashboard charts, analytics, schema
 
