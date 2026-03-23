@@ -206,6 +206,11 @@ export default function FundDetail() {
                           <div className="rounded-lg border bg-card px-3 py-2 shadow-md">
                             <p className="text-xs text-muted-foreground">{format(parseISO(d.date), "d MMM yyyy")}</p>
                             <p className="text-sm font-semibold">{Number(d.nav).toFixed(4)}</p>
+                            {d.tx_count > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                Transactions: {d.tx_count}
+                              </p>
+                            )}
                           </div>
                         );
                       }}
