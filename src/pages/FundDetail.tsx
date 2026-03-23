@@ -61,9 +61,19 @@ export default function FundDetail() {
     return computeFundReturnPeriods(navHistory, firstBuyDate);
   }, [navHistory, firstBuyDate]);
 
+  const txDates = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const tx of transactions ?? []) {
+      map.set(tx.trade_date, (map.get(tx.trade_date) ?? 0) + 1);
+    }
+    return map;
+  }, [transactions]);
+
   const chartData = (navHistory ?? []).map((n) => ({
     date: n.nav_date,
     nav: Number(n.nav_per_unit),
+    has_transaction: txDates.has(n.nav_date),
+    tx_count: txDates.get(n.nav_date) ?? 0,
   }));
 
   if (fundLoading) {
