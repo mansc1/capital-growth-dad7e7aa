@@ -114,7 +114,7 @@ export default function FundDetail() {
                 <span className={`inline-block h-2 w-2 rounded-full ${getRiskDotClass(normalizeRiskLevel(fund.risk_level))}`} />
                 {fund.risk_level != null && fund.risk_level >= 1 && fund.risk_level <= 8
                   ? `Risk ${fund.risk_level}/8`
-                  : "Risk —"}
+                  : "Risk not available"}
               </Badge>
               <Badge variant={fund.is_active ? "default" : "destructive"}>
                 {fund.is_active ? "Active" : "Inactive"}
