@@ -33,7 +33,7 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
 
   const header = (
     <CardHeader className="pb-2">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <p className="text-sm text-muted-foreground">Portfolio Value</p>
           <div className="flex items-baseline gap-3">
@@ -45,7 +45,7 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
             </span>
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {ranges.map((r) => (
             <Button
               key={r}
