@@ -45,7 +45,7 @@ export function PortfolioChart({ snapshots, isLoading, range, onRangeChange, lat
             </span>
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {ranges.map((r) => (
             <Button
               key={r}
