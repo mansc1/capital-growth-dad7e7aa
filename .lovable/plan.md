@@ -1,20 +1,18 @@
 
 
-## Fix Responsive Overflow of Chart Range Selector
+## Polish Fund Detail Risk Fallback UX
 
-**File:** `src/components/dashboard/PortfolioChart.tsx`
+**File:** `src/pages/FundDetail.tsx`
 
-### Change
+**Change:** Update the risk badge fallback text from `"Risk —"` to `"Risk not available"` (around line 107).
 
-The header layout at line 36 uses `flex items-center justify-between` which forces title and selector onto one row, causing overflow on narrow screens.
+```tsx
+// Before
+: "Risk —"}
 
-**Fix the outer wrapper (line 36):**
-- Change from `flex items-center justify-between` to `flex flex-col sm:flex-row sm:items-center justify-between gap-2`
+// After
+: "Risk not available"}
+```
 
-**Fix the selector container (line 48):**
-- Change from `flex gap-1` to `flex flex-wrap gap-1`
-
-This stacks title above selector on mobile, keeps them side-by-side on sm+, and allows buttons to wrap if needed.
-
-No changes needed to TWR or Fund Performance charts — TWR has no selector, and Fund Performance shares the Dashboard-level range from PortfolioChart.
+Single line change. Everything else stays the same.
 
