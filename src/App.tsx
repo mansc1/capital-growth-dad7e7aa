@@ -8,6 +8,7 @@ import Holdings from "./pages/Holdings";
 import Transactions from "./pages/Transactions";
 import FundDetail from "./pages/FundDetail";
 import SettingsPage from "./pages/Settings";
+import RetirementPlanner from "./pages/RetirementPlanner";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
