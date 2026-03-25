@@ -1,4 +1,4 @@
-import { LayoutDashboard, Briefcase, ArrowLeftRight, Settings } from "lucide-react";
+import { LayoutDashboard, Briefcase, ArrowLeftRight, Settings, TrendingUp } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -18,6 +18,7 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Holdings", url: "/holdings", icon: Briefcase },
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
+  { title: "Retirement Planner", url: "/retirement-planner", icon: TrendingUp },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
