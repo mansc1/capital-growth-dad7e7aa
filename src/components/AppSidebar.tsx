@@ -18,6 +18,7 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Holdings", url: "/holdings", icon: Briefcase },
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
+  { title: "Retirement Planner", url: "/retirement-planner", icon: TrendingUp },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
