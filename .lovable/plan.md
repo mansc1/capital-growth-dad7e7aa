@@ -1,31 +1,59 @@
+## Import Retirement Journey Planner into Capital Growth
 
+### Summary
 
-## Remove Unused Asset Class Placeholder Badge
+Copy the full Retirement Journey Planner (9 components, 2 lib files) from the source project into Capital Growth, wrap it in the existing AppLayout, and replace the current placeholder page.
 
-**File:** `src/pages/FundDetail.tsx`
+### Files to Create
 
-The element showing "—" is the asset class badge at line 112: `<Badge variant="secondary">{fund.asset_class ?? "—"}</Badge>`. When `asset_class` is null, it renders a badge with just "—", creating visual noise.
+**Lib/utility files (copy as-is):**
 
-### Change
+1. `src/lib/retirement-simulation.ts` -- All types, validation, and simulation logic
+2. `src/lib/retirement-presets.ts` -- Return preset configurations (Conservative/Balanced/Growth)
 
-**Option A — Remove the badge entirely** (if asset class info isn't useful):
-- Delete line 112
+**Component files (copy as-is, imports already use `@/` paths that resolve correctly):**
+3. `src/components/retirement/AssumptionsPanel.tsx`
+4. `src/components/retirement/SavingsPlanEditor.tsx`
+5. `src/components/retirement/ReturnAssumptionEditor.tsx`
+6. `src/components/retirement/SpendingStrategyCard.tsx`
+7. `src/components/retirement/RetirementChart.tsx`
+8. `src/components/retirement/SummaryMetrics.tsx`
+9. `src/components/retirement/YearlyDetailsTable.tsx`
+10. `src/components/retirement/MiniProjectionPanel.tsx`
+11. `src/components/retirement/ProjectionSheet.tsx`
 
-**Option B — Hide only when empty** (preserve it when data exists):
-- Change to: `{fund.asset_class && <Badge variant="secondary">{fund.asset_class}</Badge>}`
+### Files to Modify
 
-I'll go with **Option B** — conditionally render the badge only when asset_class has a value. This keeps useful info when present, removes noise when absent.
+12. `**src/pages/RetirementPlanner.tsx**` -- Replace the placeholder with the full planner logic from the source project's `Index.tsx`. Key changes:
+  - Keep `AppLayout` wrapper (the source project doesn't use it)
+    - Remove the outer `min-h-screen bg-background` div (AppLayout provides this)
+    - Remove the `mx-auto max-w-7xl px-4 py-8` wrapper (AppLayout's `p-6 max-w-7xl mx-auto` handles this)
+    - Import all retirement components and simulation logic
+    - Include all state management, validation, and rendering logic from the source
 
-### Technical detail
+### What stays unchanged
 
-Line 112 in `src/pages/FundDetail.tsx`:
-```tsx
-// Before
-<Badge variant="secondary">{fund.asset_class ?? "—"}</Badge>
+- All existing UI components (Card, Badge, Input, Switch, Table, etc.) are already present in Capital Growth
+- No new dependencies needed -- recharts is already in the project
+- Sidebar menu item already exists and points to `/retirement-planner`
+- No changes to Dashboard, Holdings, Transactions, Settings, or any portfolio logic
 
-// After
-{fund.asset_class && <Badge variant="secondary">{fund.asset_class}</Badge>}
-```
+### Technical Details
 
-No other files affected. Risk badge, active badge, and AMC name remain unchanged.
+The planner is entirely client-side with no backend dependencies. All 9 retirement components import from `@/components/ui/*` and `@/lib/retirement-simulation` -- paths that will resolve correctly in Capital Growth since both projects share the same alias structure.
 
+The `useIsMobile` hook is already present in Capital Growth at `src/hooks/use-mobile.tsx`.
+
+Additional guard rails for this import:
+
+- If any imported component or utility depends on files not listed above, either copy those dependencies too or adapt the imports to existing equivalents in Capital Growth. Do not leave unresolved imports.
+
+- Keep all planner state, local storage keys, helper functions, and styling isolated to the retirement planner page/components only.
+
+- Adapt the imported planner to the existing Capital Growth route/file structure using RetirementPlanner.tsx as the page entry for /retirement-planner.
+
+- Preserve the planner’s responsive behavior, but make it fit inside Capital Growth’s existing AppLayout content area. Do not introduce global overflow or page-level wrappers that affect other pages.
+
+- Do not connect the planner to live portfolio data in this step. Keep it self-contained first.
+
+- After import, verify that /retirement-planner renders without TypeScript/import errors, the form works, the chart renders, summary sections render, and existing Capital Growth pages remain unaffected.
