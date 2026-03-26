@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import {
-  LineChart,
+  ComposedChart,
   Line,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -30,6 +31,7 @@ interface RetirementChartProps {
   onToggleComparison: (v: boolean) => void;
   annualReturn: number;
   returnMode: ReturnMode;
+  actualByAge?: Map<number, number>;
 }
 
 const fmt = (v: number) => `฿${Math.max(0, Math.round(v)).toLocaleString("th-TH")}`;
@@ -43,6 +45,7 @@ const formatCurrency = (v: number) => {
 
 const BASE_COLOR = "hsl(262, 83%, 58%)";
 const COLORS = ["hsl(221, 83%, 53%)", "hsl(142, 71%, 45%)", "hsl(38, 92%, 50%)"];
+const ACTUAL_BAR_COLOR = "hsla(221, 83%, 53%, 0.25)";
 
 function CustomTooltip({ active, payload, label, comparisonMode, retirementAge }: any) {
   if (!active || !payload?.length) return null;
@@ -91,7 +94,13 @@ function CustomTooltip({ active, payload, label, comparisonMode, retirementAge }
           {row.annualWithdrawal > 0 && <Row label="Annual Withdrawal" value={row.annualWithdrawal} />}
           <Row label="Interest Earned" value={row.annualInterest} />
           <div className="border-t border-border my-1" />
-          <Row label="End Balance" value={row.endBalance} bold />
+          <Row label="Projected" value={row.endBalance} bold />
+          {row.actual_balance != null && (
+            <>
+              <Row label="Actual" value={row.actual_balance} />
+              <DiffRow projected={row.endBalance} actual={row.actual_balance} />
+            </>
+          )}
           {!row.isPositive && <p className="text-destructive font-medium mt-1">⚠ Balance depleted</p>}
         </div>
       )}
@@ -110,6 +119,18 @@ function Row({ label, value, bold }: { label: string; value: number; bold?: bool
   );
 }
 
+function DiffRow({ projected, actual }: { projected: number; actual: number }) {
+  const diff = actual - projected;
+  const sign = diff >= 0 ? "+" : "";
+  const color = diff >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive";
+  return (
+    <div className="flex justify-between gap-4">
+      <span className="text-muted-foreground">Difference</span>
+      <span className={`text-xs font-medium ${color}`}>{sign}{fmt(diff)}</span>
+    </div>
+  );
+}
+
 export function RetirementChart({
   baseResult,
   comparisonResults,
@@ -119,19 +140,26 @@ export function RetirementChart({
   onToggleComparison,
   annualReturn,
   returnMode,
+  actualByAge,
 }: RetirementChartProps) {
   const scenarios = useMemo(() => {
     if (!comparisonMode || !comparisonResults?.length) return [];
     return comparisonResults;
   }, [comparisonMode, comparisonResults]);
 
+  const hasActualData = !comparisonMode && actualByAge && actualByAge.size > 0;
+
   const chartData = useMemo(() => {
     if (!comparisonMode || scenarios.length === 0) {
-      return baseResult.rows.map((r) => ({
-        ...r,
-        _rawBalance: r.endBalance,
-        endBalance: Math.max(0, r.endBalance),
-      }));
+      return baseResult.rows.map((r) => {
+        const actual = actualByAge?.get(r.age);
+        return {
+          ...r,
+          _rawBalance: r.endBalance,
+          endBalance: Math.max(0, r.endBalance),
+          ...(actual !== undefined ? { actual_balance: actual } : {}),
+        };
+      });
     }
 
     const allScenarios = [
@@ -148,7 +176,7 @@ export function RetirementChart({
       });
     });
     return Array.from(ageMap.values()).sort((a, b) => a.age - b.age);
-  }, [baseResult, scenarios, comparisonMode, annualReturn]);
+  }, [baseResult, scenarios, comparisonMode, annualReturn, actualByAge]);
 
   const comparisonKeys = useMemo(() => {
     if (!comparisonMode || scenarios.length === 0) return [];
@@ -164,7 +192,7 @@ export function RetirementChart({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
         <CardTitle className="text-lg">Retirement Balance Projection</CardTitle>
         <div className="flex items-center gap-2">
           <Label htmlFor="comparison" className="text-sm text-muted-foreground">Compare Scenarios</Label>
@@ -177,7 +205,7 @@ export function RetirementChart({
         )}
         <div className="h-[340px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 28, right: 20, left: 10, bottom: 5 }}>
+            <ComposedChart data={chartData} margin={{ top: 28, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis
                 dataKey="age"
@@ -198,6 +226,16 @@ export function RetirementChart({
                 <ReferenceLine x={baseResult.runOutAge} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: "Run Out", position: "top", fill: "hsl(var(--destructive))", fontSize: 11 }} />
               )}
 
+              {/* Actual bars rendered first so line draws on top */}
+              {hasActualData && (
+                <Bar
+                  dataKey="actual_balance"
+                  fill={ACTUAL_BAR_COLOR}
+                  barSize={12}
+                  name="Actual"
+                />
+              )}
+
               {!comparisonMode ? (
                 <Line
                   type="monotone"
@@ -206,7 +244,7 @@ export function RetirementChart({
                   strokeWidth={2.5}
                   dot={false}
                   activeDot={{ r: 5, strokeWidth: 2 }}
-                  name="Balance"
+                  name="Projected"
                 />
               ) : (
                 comparisonKeys.map(({ key, label }, i) => (
@@ -223,8 +261,8 @@ export function RetirementChart({
                 ))
               )}
 
-              {comparisonMode && <Legend />}
-            </LineChart>
+              {(comparisonMode || hasActualData) && <Legend />}
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </CardContent>
