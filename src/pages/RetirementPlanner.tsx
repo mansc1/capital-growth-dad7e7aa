@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { AssumptionsPanel } from "@/components/retirement/AssumptionsPanel";
 import { SavingsPlanEditor } from "@/components/retirement/SavingsPlanEditor";
 import { ReturnAssumptionEditor } from "@/components/retirement/ReturnAssumptionEditor";
