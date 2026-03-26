@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { rebuildPortfolioSnapshotsForToday } from "../_shared/portfolio/rebuild-portfolio-snapshots.ts";
 import { loadFullSecDirectory } from "../_shared/nav/load-sec-directory.ts";
+import { SecApiClient, delay, THROTTLE_DELAY_MS } from "../_shared/sec-api/client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,71 +9,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 const BACKFILL_CAP_DAYS = 365;
-const THROTTLE_MS = 200;
-const MAX_RETRIES = 2;
-const BACKOFF_BASE_MS = 500;
-const REQUEST_TIMEOUT_MS = 15_000;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchWithRetry(
-  url: string,
-  headers: Record<string, string>,
-  retries = MAX_RETRIES,
-): Promise<Response> {
-  let lastError: Error | null = null;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    try {
-      const res = await fetch(url, { headers, signal: controller.signal });
-      clearTimeout(timeout);
-      if (res.status === 429 || res.status >= 500) {
-        if (attempt < retries) {
-          const wait = BACKOFF_BASE_MS * Math.pow(2, attempt);
-          console.warn(`[backfill] HTTP ${res.status} for ${url}, retrying in ${wait}ms…`);
-          await delay(wait);
-          continue;
-        }
-      }
-      return res;
-    } catch (err) {
-      clearTimeout(timeout);
-      lastError = err as Error;
-      if (attempt < retries) {
-        const wait = BACKOFF_BASE_MS * Math.pow(2, attempt);
-        await delay(wait);
-        continue;
-      }
-    }
-  }
-  throw lastError ?? new Error(`fetchWithRetry failed for ${url}`);
-}
-
-const NAV_FIELD_CANDIDATES = ["last_val", "nav", "net_asset"] as const;
-
-function parseDailyNavResponse(data: unknown): number | null {
-  if (data == null) return null;
-  let record: Record<string, unknown>;
-  if (Array.isArray(data)) {
-    if (data.length === 0) return null;
-    record = data[0] as Record<string, unknown>;
-  } else if (typeof data === "object") {
-    record = data as Record<string, unknown>;
-  } else {
-    return null;
-  }
-  for (const field of NAV_FIELD_CANDIDATES) {
-    const raw = record[field];
-    if (raw !== undefined && raw !== null) {
-      const val = parseFloat(String(raw));
-      if (!isNaN(val) && val > 0) return val;
-    }
-  }
-  return null;
-}
 
 function isWeekend(date: Date): boolean {
   const day = date.getDay();
@@ -132,6 +68,7 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const client = new SecApiClient(secApiKey);
 
   const result: BackfillResult = {
     success: true,
@@ -210,10 +147,8 @@ Deno.serve(async (req) => {
     for (const [fundId, earliestTx] of earliestTxByFund) {
       const earliestNav = earliestNavByFund.get(fundId);
       if (!earliestNav) {
-        // No nav_history at all — backfill from earliest tx to today
         fundsWithGaps.push({ fundId, requestedStart: earliestTx, endDate: toDateStr(new Date()) });
       } else if (earliestTx < earliestNav) {
-        // Gap: tx predates nav coverage — backfill up to day before earliest nav
         fundsWithGaps.push({ fundId, requestedStart: earliestTx, endDate: toDateStr(addDays(new Date(earliestNav + "T00:00:00Z"), -1)) });
       } else {
         result.fundsSkipped++;
@@ -245,8 +180,6 @@ Deno.serve(async (req) => {
     if (fundsErr) throw new Error(`Failed to load funds: ${fundsErr.message}`);
 
     const fundMap = new Map((funds ?? []).map((f) => [f.id, f]));
-
-    // Paginated directory load (table has 14k+ rows, exceeds default 1000 limit)
     const projIdMap = await loadFullSecDirectory(supabase, "backfill");
 
     console.log(`[backfill] ${fundsWithGaps.length} fund(s) with gaps`);
@@ -264,7 +197,6 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // This fund enters the resolved backfill loop
       result.fundsProcessed++;
 
       // Apply 365-day cap
@@ -306,50 +238,31 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Call SEC API for every weekday
         result.datesChecked++;
 
         try {
-          const url = `https://api.sec.or.th/FundDailyInfo/${projId}/dailynav/${dateStr}`;
-          const res = await fetchWithRetry(url, {
-            "Ocp-Apim-Subscription-Key": secApiKey,
-            Accept: "application/json",
-          });
+          const navResult = await client.fetchDailyNav(projId, dateStr, "[backfill]");
 
-          if (res.status === 204) {
-            await res.text(); // consume body
+          if (navResult.status === "no_data") {
             result.noDataDates++;
-
-            // Log inconsistency if we have an existing row for a 204 date
             if (existingNavMap.has(dateStr)) {
               console.warn(
-                `[backfill] Inconsistency: SEC returned 204 for ${fund.fund_code} on ${dateStr} but nav_history has value ${existingNavMap.get(dateStr)} — leaving row unchanged`
+                `[backfill] Inconsistency: SEC returned no data for ${fund.fund_code} on ${dateStr} but nav_history has value ${existingNavMap.get(dateStr)} — leaving row unchanged`
               );
             }
-
-            await delay(THROTTLE_MS);
+            await delay(THROTTLE_DELAY_MS);
             current.setDate(current.getDate() + 1);
             continue;
           }
 
-          if (!res.ok) {
-            await res.text();
-            result.apiErrors.push(`${fund.fund_code}: HTTP ${res.status} on ${dateStr}`);
-            await delay(THROTTLE_MS);
+          if (navResult.status === "error" || navResult.status === "auth_error") {
+            result.apiErrors.push(`${fund.fund_code}: API error on ${dateStr}`);
+            await delay(THROTTLE_DELAY_MS);
             current.setDate(current.getDate() + 1);
             continue;
           }
 
-          const data = await res.json();
-          const navPerUnit = parseDailyNavResponse(data);
-
-          if (navPerUnit === null) {
-            result.noDataDates++;
-            await delay(THROTTLE_MS);
-            current.setDate(current.getDate() + 1);
-            continue;
-          }
-
+          const navPerUnit = navResult.navPerUnit;
           const existingNav = existingNavMap.get(dateStr);
           const now = new Date().toISOString();
 
@@ -392,7 +305,7 @@ Deno.serve(async (req) => {
           result.apiErrors.push(`${fund.fund_code}: ${(err as Error).message} on ${dateStr}`);
         }
 
-        await delay(THROTTLE_MS);
+        await delay(THROTTLE_DELAY_MS);
         current.setDate(current.getDate() + 1);
       }
     }
