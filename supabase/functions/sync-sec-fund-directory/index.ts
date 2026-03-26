@@ -1,50 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SecApiClient, delay, THROTTLE_DELAY_MS } from "../_shared/sec-api/client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const THROTTLE_MS = 200;
-const REQUEST_TIMEOUT_MS = 15_000;
-const MAX_RETRIES = 2;
-const BACKOFF_BASE_MS = 500;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchWithRetry(
-  url: string,
-  headers: Record<string, string>,
-  retries = MAX_RETRIES,
-): Promise<Response> {
-  let lastError: Error | null = null;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    try {
-      const res = await fetch(url, { headers, signal: controller.signal });
-      clearTimeout(timeout);
-      if (res.status === 429 || res.status >= 500) {
-        if (attempt < retries) {
-          await delay(BACKOFF_BASE_MS * Math.pow(2, attempt));
-          continue;
-        }
-      }
-      return res;
-    } catch (err) {
-      clearTimeout(timeout);
-      lastError = err as Error;
-      if (attempt < retries) {
-        await delay(BACKOFF_BASE_MS * Math.pow(2, attempt));
-        continue;
-      }
-    }
-  }
-  throw lastError ?? new Error(`fetchWithRetry failed for ${url}`);
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -63,23 +24,11 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
-  const apiHeaders = {
-    "Ocp-Apim-Subscription-Key": secApiKey,
-    Accept: "application/json",
-  };
+  const client = new SecApiClient(secApiKey);
 
   try {
     // Step 1: List all AMCs
-    const amcRes = await fetchWithRetry("https://api.sec.or.th/FundFactsheet/fund/amc", apiHeaders);
-    if (!amcRes.ok) {
-      const body = await amcRes.text();
-      throw new Error(`Failed to list AMCs: HTTP ${amcRes.status} — ${body.substring(0, 200)}`);
-    }
-
-    const amcs = (await amcRes.json()) as Array<{ unique_id: string; name_en?: string; name_th?: string }>;
-    if (!Array.isArray(amcs) || amcs.length === 0) {
-      throw new Error("AMC list is empty");
-    }
+    const amcs = await client.fetchAmcList("[sync-dir]");
 
     let totalFunds = 0;
     let failedAmcs = 0;
@@ -90,26 +39,9 @@ Deno.serve(async (req) => {
       if (!amc.unique_id) continue;
 
       try {
-        const fundRes = await fetchWithRetry(
-          `https://api.sec.or.th/FundFactsheet/fund/amc/${amc.unique_id}`,
-          apiHeaders,
-        );
+        const funds = await client.fetchFundsByAmc(amc.unique_id, "[sync-dir]");
 
-        if (!fundRes.ok) {
-          console.warn(`Failed to list funds for AMC ${amc.unique_id}: HTTP ${fundRes.status}`);
-          await fundRes.text();
-          failedAmcs++;
-          continue;
-        }
-
-        const funds = (await fundRes.json()) as Array<{
-          proj_id: string;
-          proj_abbr_name: string;
-          proj_name_en?: string;
-          proj_name_th?: string;
-        }>;
-
-        if (Array.isArray(funds) && funds.length > 0) {
+        if (funds.length > 0) {
           const now = new Date().toISOString();
           const rows = funds
             .filter((f) => f.proj_id && f.proj_abbr_name)
@@ -129,18 +61,18 @@ Deno.serve(async (req) => {
               .from("sec_fund_directory")
               .upsert(chunk, { onConflict: "proj_id" });
             if (error) {
-              console.warn(`Upsert error for AMC ${amc.unique_id} chunk ${j}: ${error.message}`);
+              console.warn(`[sync-dir] Upsert error for AMC ${amc.unique_id} chunk ${j}: ${error.message}`);
             }
           }
           totalFunds += rows.length;
         }
       } catch (err) {
-        console.warn(`Error for AMC ${amc.unique_id}:`, (err as Error).message);
+        console.warn(`[sync-dir] Error for AMC ${amc.unique_id}:`, (err as Error).message);
         failedAmcs++;
       }
 
       if (i < amcs.length - 1) {
-        await delay(THROTTLE_MS);
+        await delay(THROTTLE_DELAY_MS);
       }
     }
 
