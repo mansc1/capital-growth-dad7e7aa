@@ -75,6 +75,22 @@ export default function RetirementPlanner() {
   const { errors, warnings } = useMemo(() => validateInputs(input), [input]);
   const valid = !hasErrors(errors);
 
+  const { data: portfolioTimeSeries } = usePortfolioTimeSeries('SINCE_START');
+
+  const actualByAge = useMemo(() => {
+    if (!portfolioTimeSeries?.length) return undefined;
+    const currentAge = new Date().getFullYear() - input.birthYear;
+    const byYear = new Map<number, number>();
+    for (const snap of portfolioTimeSeries) {
+      const year = parseInt(snap.snapshot_date.slice(0, 4));
+      const age = year - input.birthYear;
+      if (age > currentAge || age < 0) continue;
+      // Keep last value per year (data is sorted by date)
+      byYear.set(age, snap.total_value);
+    }
+    return byYear.size > 0 ? byYear : undefined;
+  }, [portfolioTimeSeries, input.birthYear]);
+
   const baseResult = useMemo(() => {
     if (!valid) return null;
     return runSimulation(input);
@@ -109,6 +125,7 @@ export default function RetirementPlanner() {
     onToggleComparison: setComparisonMode,
     annualReturn: input.annualReturn,
     returnMode: input.returnMode,
+    actualByAge,
   };
 
   const inputSections = (
