@@ -1,59 +1,55 @@
-## Import Retirement Journey Planner into Capital Growth
+
+
+## Add Actual vs Projected Overlay to Retirement Chart
 
 ### Summary
 
-Copy the full Retirement Journey Planner (9 components, 2 lib files) from the source project into Capital Growth, wrap it in the existing AppLayout, and replace the current placeholder page.
+Overlay actual portfolio values as bars on the existing retirement projection chart. The actual data comes from the existing `usePortfolioTimeSeries` hook, converted from dates to ages using the user's birth year.
 
-### Files to Create
+### Changes
 
-**Lib/utility files (copy as-is):**
+**1. `src/pages/RetirementPlanner.tsx`** — Fetch actual portfolio data and pass to chart
 
-1. `src/lib/retirement-simulation.ts` -- All types, validation, and simulation logic
-2. `src/lib/retirement-presets.ts` -- Return preset configurations (Conservative/Balanced/Growth)
+- Import `usePortfolioTimeSeries` hook
+- Compute `actualByAge`: take time series data, convert `snapshot_date` to age using `input.birthYear`, group by year (take last value per year), produce `Map<number, number>` of age → total_value
+- Only include ages ≤ current age (based on current year - birthYear)
+- Pass `actualByAge` to `RetirementChart` and `ProjectionSheet` via `chartProps`
 
-**Component files (copy as-is, imports already use `@/` paths that resolve correctly):**
-3. `src/components/retirement/AssumptionsPanel.tsx`
-4. `src/components/retirement/SavingsPlanEditor.tsx`
-5. `src/components/retirement/ReturnAssumptionEditor.tsx`
-6. `src/components/retirement/SpendingStrategyCard.tsx`
-7. `src/components/retirement/RetirementChart.tsx`
-8. `src/components/retirement/SummaryMetrics.tsx`
-9. `src/components/retirement/YearlyDetailsTable.tsx`
-10. `src/components/retirement/MiniProjectionPanel.tsx`
-11. `src/components/retirement/ProjectionSheet.tsx`
+**2. `src/components/retirement/RetirementChart.tsx`** — Add bar overlay
 
-### Files to Modify
+Props change:
+- Add optional `actualByAge?: Map<number, number>` prop
 
-12. `**src/pages/RetirementPlanner.tsx**` -- Replace the placeholder with the full planner logic from the source project's `Index.tsx`. Key changes:
-  - Keep `AppLayout` wrapper (the source project doesn't use it)
-    - Remove the outer `min-h-screen bg-background` div (AppLayout provides this)
-    - Remove the `mx-auto max-w-7xl px-4 py-8` wrapper (AppLayout's `p-6 max-w-7xl mx-auto` handles this)
-    - Import all retirement components and simulation logic
-    - Include all state management, validation, and rendering logic from the source
+Chart data merge (in `chartData` useMemo, non-comparison mode):
+- For each row, add `actual_balance: actualByAge?.get(row.age) ?? undefined`
+- Only set the field when a value exists (so bars only render for ages with data)
 
-### What stays unchanged
+Chart rendering:
+- Switch from `LineChart` to `ComposedChart` (from recharts) to support both Line and Bar
+- Add `<Bar dataKey="actual_balance" fill="hsl(221, 83%, 53% / 0.25)" barSize={12} name="Actual" />` rendered before the Line so line draws on top
+- Rename existing line `name` to "Projected"
+- Add `<Legend />` in non-comparison mode when actual data exists
 
-- All existing UI components (Card, Badge, Input, Switch, Table, etc.) are already present in Capital Growth
-- No new dependencies needed -- recharts is already in the project
-- Sidebar menu item already exists and points to `/retirement-planner`
-- No changes to Dashboard, Holdings, Transactions, Settings, or any portfolio logic
+Tooltip update:
+- In non-comparison `CustomTooltip`, after existing rows, add:
+  - If `row.actual_balance` exists: show "Actual: ฿X" row
+  - Show "Difference: ฿X" (actual - projected, with +/- sign)
+
+**3. Comparison mode handling**
+- When comparison mode is on, hide the actual bars (keep chart simple)
+- `actualByAge` is only used in non-comparison rendering
 
 ### Technical Details
 
-The planner is entirely client-side with no backend dependencies. All 9 retirement components import from `@/components/ui/*` and `@/lib/retirement-simulation` -- paths that will resolve correctly in Capital Growth since both projects share the same alias structure.
+- `ComposedChart` is a drop-in replacement for `LineChart` in recharts — same API, supports mixed series types
+- Bar color uses the same blue as projected line but at 25% opacity for visual subordination
+- No new API calls — `usePortfolioTimeSeries('SINCE_START')` reuses existing cached query
+- Current age = `new Date().getFullYear() - birthYear`
+- Year-to-age conversion: `year - birthYear` where `year = parseInt(snapshot_date.slice(0, 4))`
 
-The `useIsMobile` hook is already present in Capital Growth at `src/hooks/use-mobile.tsx`.
+### What stays unchanged
+- Simulation logic, all retirement calculations
+- Comparison mode rendering (bars hidden)
+- Dashboard, Holdings, Transactions
+- All hooks and analytics logic
 
-Additional guard rails for this import:
-
-- If any imported component or utility depends on files not listed above, either copy those dependencies too or adapt the imports to existing equivalents in Capital Growth. Do not leave unresolved imports.
-
-- Keep all planner state, local storage keys, helper functions, and styling isolated to the retirement planner page/components only.
-
-- Adapt the imported planner to the existing Capital Growth route/file structure using RetirementPlanner.tsx as the page entry for /retirement-planner.
-
-- Preserve the planner’s responsive behavior, but make it fit inside Capital Growth’s existing AppLayout content area. Do not introduce global overflow or page-level wrappers that affect other pages.
-
-- Do not connect the planner to live portfolio data in this step. Keep it self-contained first.
-
-- After import, verify that /retirement-planner renders without TypeScript/import errors, the form works, the chart renders, summary sections render, and existing Capital Growth pages remain unaffected.
