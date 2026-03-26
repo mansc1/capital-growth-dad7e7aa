@@ -27,6 +27,7 @@ interface ProjectionSheetProps {
   onToggleComparison: (v: boolean) => void;
   annualReturn: number;
   returnMode: ReturnMode;
+  actualByAge?: Map<number, number>;
 }
 
 function scrollToSection(id: string, onClose: () => void) {
@@ -47,6 +48,7 @@ export function ProjectionSheet({
   onToggleComparison,
   annualReturn,
   returnMode,
+  actualByAge,
   inflationRate,
   applyInflation,
   spendingMode,
@@ -71,6 +73,7 @@ export function ProjectionSheet({
             onToggleComparison={onToggleComparison}
             annualReturn={annualReturn}
             returnMode={returnMode}
+            actualByAge={actualByAge}
           />
           <SummaryMetrics
             result={baseResult}
