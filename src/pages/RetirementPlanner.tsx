@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
@@ -13,6 +13,7 @@ import { YearlyDetailsTable } from "@/components/retirement/YearlyDetailsTable";
 import { MiniProjectionPanel } from "@/components/retirement/MiniProjectionPanel";
 import { ProjectionSheet } from "@/components/retirement/ProjectionSheet";
 import { RETURN_PRESETS } from "@/lib/retirement-presets";
+import { loadPersistedState, savePersistedState } from "@/lib/retirement-storage";
 import {
   runSimulation,
   validateInputs,
@@ -44,9 +45,22 @@ const DEFAULT_INPUT: SimulationInput = {
 };
 
 export default function RetirementPlanner() {
-  const [input, setInput] = useState<SimulationInput>(DEFAULT_INPUT);
-  const [comparisonMode, setComparisonMode] = useState(false);
+  const [input, setInput] = useState<SimulationInput>(() => {
+    const saved = loadPersistedState();
+    return saved ? saved.input : DEFAULT_INPUT;
+  });
+  const [comparisonMode, setComparisonMode] = useState(() => {
+    const saved = loadPersistedState();
+    return saved ? saved.comparisonMode : false;
+  });
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => savePersistedState(input, comparisonMode), 500);
+    return () => clearTimeout(saveTimer.current);
+  }, [input, comparisonMode]);
   const isMobile = useIsMobile();
 
   const handleFieldChange = (field: keyof SimulationInput, value: number) => {
@@ -168,6 +182,7 @@ export default function RetirementPlanner() {
         <p className="mt-1 text-muted-foreground">
           Plan your retirement journey. Estimate how your savings grow and how long they last.
         </p>
+        <p className="mt-1 text-xs text-muted-foreground/60">Your inputs are saved automatically on this device.</p>
       </div>
 
       <div className="hidden lg:grid lg:grid-cols-12 lg:gap-6">
