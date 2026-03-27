@@ -1,31 +1,61 @@
 
 
-## Persist Retirement Simulation Inputs with localStorage
+## Fix Dashboard Data Consistency — Single Source of Truth
 
-### Changes
+### Problem
+Dashboard mixes two data sources: `useHoldings()` for display values (lines 95-98) and `usePortfolioTimeSeries()` for the chart. This causes mismatches between the header number, chart points, and snapshot card.
 
-**1. Create `src/lib/retirement-storage.ts`** — Small helper for safe read/write
+### Solution
+Derive all Dashboard display values from the snapshot time series. Keep `useHoldings()` only for allocation chart, holdings table, and the empty-state check.
 
-- `STORAGE_KEY = "retirement_planner_state"`
-- `loadInput(): SimulationInput | null` — parse JSON, validate it's an object with expected keys, return null on any error
-- `saveInput(input: SimulationInput): void` — JSON.stringify and write
+### File: `src/pages/Dashboard.tsx`
 
-**2. Update `src/pages/RetirementPlanner.tsx`**
+**Change 1 — Derive display values from snapshots (replace lines 95-98):**
 
-- Initialize `input` state with a lazy initializer: `useState(() => loadInput() ?? DEFAULT_INPUT)`
-- Initialize `comparisonMode` similarly from localStorage (store alongside input or separately)
-- Add a `useEffect` that saves `input` and `comparisonMode` to localStorage on change, debounced with a 500ms `setTimeout`
-- Add a muted note below the page subtitle: `"Your inputs are saved automatically on this device."`
+```ts
+const latestSnapshot = snapshots?.[snapshots.length - 1];
+const latestValue = Number(latestSnapshot?.total_value ?? 0);
+const latestCost = Number(latestSnapshot?.total_cost ?? 0);
+const latestGainLoss = Number(latestSnapshot?.total_gain_loss ?? 0);
+const latestMwr = Number(latestSnapshot?.total_return_percent ?? 0);
+```
 
-### Persisted state
-- `input` (the full `SimulationInput` object — birth year, ages, savings ranges, return mode/ranges, spending mode, withdrawal rate, inflation, etc.)
-- `comparisonMode` boolean
+**Change 2 — Update PortfolioChart props (lines 116-123):**
 
-### Not persisted
-- `sheetOpen` (transient UI state)
-- All computed results (derived from input)
+Pass `latestValue` and `latestMwr` instead of holdings-based values:
 
-### Safety
-- `loadInput` wrapped in try/catch — any parse error or missing keys returns null → defaults used
-- Type guard checks that loaded object has `birthYear` as number before accepting
+```tsx
+<PortfolioChart
+  snapshots={snapshots ?? []}
+  isLoading={snapshotsLoading}
+  range={chartRange}
+  onRangeChange={setChartRange}
+  latestValue={latestValue}
+  returnPct={latestMwr}
+/>
+```
+
+**Change 3 — Update PortfolioSnapshotCard props (lines 139-146):**
+
+```tsx
+<PortfolioSnapshotCard
+  totalValue={latestValue}
+  totalCost={latestCost}
+  unrealizedGain={latestGainLoss}
+  mwr={latestMwr}
+  twr={twrPct}
+  isLoading={snapshotsLoading}
+/>
+```
+
+**What stays unchanged:**
+- `useHoldings()` remains for: empty-state check, `heldFundIds`, `AllocationChart`, `HoldingsSummaryTable`, `FundPerformanceChart`
+- All hooks, analytics, charts, and UI layout unchanged
+- `PortfolioChart.tsx` and `PortfolioSnapshotCard.tsx` components unchanged (they already accept these props)
+
+### Result
+- Portfolio Value header = last chart point = last snapshot value
+- Snapshot card values = same source as chart
+- TWR already uses `allSnapshots` — no change needed
+- Holdings page continues using `useHoldings()` independently
 
