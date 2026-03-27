@@ -92,10 +92,11 @@ export default function Dashboard() {
     );
   }
 
-  const totalCost = holdings?.reduce((s, h) => s + h.total_cost, 0) ?? 0;
-  const totalValue = holdings?.reduce((s, h) => s + h.market_value, 0) ?? 0;
-  const totalGainLoss = totalValue - totalCost;
-  const totalReturnPct = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
+  const latestSnapshot = snapshots?.[snapshots.length - 1];
+  const latestValue = Number(latestSnapshot?.total_value ?? 0);
+  const latestCost = Number(latestSnapshot?.total_cost ?? 0);
+  const latestGainLoss = Number(latestSnapshot?.total_gain_loss ?? 0);
+  const latestMwr = Number(latestSnapshot?.total_return_percent ?? 0);
 
   const lastTimeSeriesPoint = snapshots?.[snapshots.length - 1];
   const latestNavDate = lastTimeSeriesPoint?.latest_nav_date ?? null;
@@ -118,8 +119,8 @@ export default function Dashboard() {
           isLoading={snapshotsLoading}
           range={chartRange}
           onRangeChange={setChartRange}
-          latestValue={totalValue}
-          returnPct={totalReturnPct}
+          latestValue={latestValue}
+          returnPct={latestMwr}
         />
 
         <PortfolioTWRChart
@@ -137,12 +138,12 @@ export default function Dashboard() {
         />
 
         <PortfolioSnapshotCard
-          totalValue={totalValue}
-          totalCost={totalCost}
-          unrealizedGain={totalGainLoss}
-          mwr={totalReturnPct}
+          totalValue={latestValue}
+          totalCost={latestCost}
+          unrealizedGain={latestGainLoss}
+          mwr={latestMwr}
           twr={twrPct}
-          isLoading={holdingsLoading}
+          isLoading={snapshotsLoading}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
