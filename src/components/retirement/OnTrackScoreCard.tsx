@@ -8,6 +8,7 @@ interface OnTrackScoreCardProps {
   band: ScoreBand;
   trend: ScoreTrend;
   recommendation: string;
+  subtitle?: string;
 }
 
 const bandColors: Record<ScoreBand, string> = {
@@ -25,7 +26,7 @@ const trendConfig: Record<ScoreTrend, { icon: typeof TrendingUp; label: string }
   declining: { icon: TrendingDown, label: "Declining" },
 };
 
-export function OnTrackScoreCard({ score, band, trend, recommendation }: OnTrackScoreCardProps) {
+export function OnTrackScoreCard({ score, band, trend, recommendation, subtitle }: OnTrackScoreCardProps) {
   const TrendIcon = trendConfig[trend].icon;
 
   return (
@@ -47,6 +48,7 @@ export function OnTrackScoreCard({ score, band, trend, recommendation }: OnTrack
           </div>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{recommendation}</p>
+        {subtitle && <p className="mt-1 text-xs text-muted-foreground/60">{subtitle}</p>}
       </CardContent>
     </Card>
   );

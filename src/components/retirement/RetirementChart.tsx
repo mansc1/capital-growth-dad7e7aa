@@ -32,6 +32,7 @@ interface RetirementChartProps {
   annualReturn: number;
   returnMode: ReturnMode;
   actualByAge?: Map<number, number>;
+  hideComparisonToggle?: boolean;
 }
 
 const fmt = (v: number) => `฿${Math.max(0, Math.round(v)).toLocaleString("th-TH")}`;
@@ -141,6 +142,7 @@ export function RetirementChart({
   annualReturn,
   returnMode,
   actualByAge,
+  hideComparisonToggle,
 }: RetirementChartProps) {
   const scenarios = useMemo(() => {
     if (!comparisonMode || !comparisonResults?.length) return [];
@@ -195,8 +197,12 @@ export function RetirementChart({
       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
         <CardTitle className="text-lg">Retirement Balance Projection</CardTitle>
         <div className="flex items-center gap-2">
-          <Label htmlFor="comparison" className="text-sm text-muted-foreground">Compare Scenarios</Label>
-          <Switch id="comparison" checked={comparisonMode} onCheckedChange={onToggleComparison} />
+          {!hideComparisonToggle && (
+            <>
+              <Label htmlFor="comparison" className="text-sm text-muted-foreground">Compare Scenarios</Label>
+              <Switch id="comparison" checked={comparisonMode} onCheckedChange={onToggleComparison} />
+            </>
+          )}
         </div>
       </CardHeader>
       <CardContent>

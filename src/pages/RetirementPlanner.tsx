@@ -1,7 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { differenceInMonths } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { CheckCircle2, Info, Sparkles } from "lucide-react";
 import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { AssumptionsPanel } from "@/components/retirement/AssumptionsPanel";
 import { SavingsPlanEditor } from "@/components/retirement/SavingsPlanEditor";
@@ -79,13 +83,28 @@ export default function RetirementPlanner() {
   const [planHistory, setPlanHistory] = useState<SavedRetirementPlan[]>(loadPlanHistory);
   const { toast } = useToast();
 
+  const navigate = useNavigate();
+
+  const isDraftMatchingActive = useMemo(() => {
+    if (!activePlan) return false;
+    return JSON.stringify(input) === JSON.stringify(activePlan.input);
+  }, [input, activePlan]);
+
   const handleConfirmPlan = () => {
     const plan = createPlan(input);
     saveActivePlan(plan);
     pushPlanToHistory(plan);
     setActivePlan(plan);
     setPlanHistory(loadPlanHistory());
-    toast({ title: "Plan saved", description: "Your active plan has been updated." });
+    toast({
+      title: "Active plan updated",
+      description: "Your plan is now set.",
+      action: (
+        <Button variant="outline" size="sm" onClick={() => navigate("/my-plan")}>
+          View My Plan
+        </Button>
+      ),
+    });
   };
 
   const handleLoadPlan = (plan: SavedRetirementPlan) => {
@@ -312,6 +331,7 @@ export default function RetirementPlanner() {
       band={scoreData.band}
       trend={scoreData.trend}
       recommendation={scoreData.recommendation}
+      subtitle="Based on your draft plan"
     />
   ) : portfolioTimeSeries?.length ? null : (
     <OnTrackScoreEmpty />
@@ -326,6 +346,26 @@ export default function RetirementPlanner() {
         </p>
         <p className="mt-1 text-xs text-muted-foreground/60">Your inputs are saved automatically on this device.</p>
       </div>
+
+      {/* Draft vs Active status */}
+      {isDraftMatchingActive ? (
+        <Alert className="mb-6 bg-green-500/5 border-green-500/20">
+          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertDescription className="text-green-700 dark:text-green-300">Using your active plan</AlertDescription>
+        </Alert>
+      ) : activePlan ? (
+        <Alert className="mb-6">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            You're editing a draft plan. Your active plan will not change until you click "Set as My Plan".
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="mb-6">
+          <Sparkles className="h-4 w-4" />
+          <AlertDescription>You're creating your first plan</AlertDescription>
+        </Alert>
+      )}
 
       <div className="hidden lg:grid lg:grid-cols-12 lg:gap-6">
         <div className="space-y-6 lg:col-span-7">{inputSections}</div>
