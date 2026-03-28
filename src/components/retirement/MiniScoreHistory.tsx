@@ -27,13 +27,13 @@ export function MiniScoreHistory({ history }: MiniScoreHistoryProps) {
         {delta !== null && (
           <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
             {delta > 0 ? (
-              <TrendingUp className="h-3 w-3 text-green-600 dark:text-green-400" />
+              <TrendingUp className="h-3 w-3 text-primary" />
             ) : delta < 0 ? (
-              <TrendingDown className="h-3 w-3 text-red-600 dark:text-red-400" />
+              <TrendingDown className="h-3 w-3 text-destructive" />
             ) : (
               <Minus className="h-3 w-3" />
             )}
-            <span className={delta > 0 ? "text-green-600 dark:text-green-400" : delta < 0 ? "text-red-600 dark:text-red-400" : ""}>
+            <span className={delta > 0 ? "text-primary" : delta < 0 ? "text-destructive" : ""}>
               {delta > 0 ? "+" : ""}{delta} this week
             </span>
           </span>
