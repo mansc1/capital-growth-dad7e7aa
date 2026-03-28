@@ -70,6 +70,7 @@ export interface OnTrackScoreInput {
   consistency: number;
   momentum: number;
   previousScore?: number | null;
+  monthsSinceStart?: number;
 }
 
 export function computeOnTrackScore({
@@ -77,9 +78,22 @@ export function computeOnTrackScore({
   consistency,
   momentum,
   previousScore,
+  monthsSinceStart,
 }: OnTrackScoreInput): number {
+  const isNewUser = (monthsSinceStart ?? 12) < 3;
+
+  let adjProgress = progress;
+  let adjConsistency = consistency;
+  let wP = 0.55, wC = 0.25, wM = 0.20;
+
+  if (isNewUser) {
+    adjProgress = Math.max(progress, 50);
+    adjConsistency = Math.max(consistency, 60);
+    wP = 0.40; wC = 0.40; wM = 0.20;
+  }
+
   const raw = Math.min(100, Math.max(0,
-    0.55 * progress + 0.25 * consistency + 0.20 * momentum,
+    wP * adjProgress + wC * adjConsistency + wM * momentum,
   ));
 
   if (previousScore == null) return Math.round(raw);
@@ -89,9 +103,10 @@ export function computeOnTrackScore({
   return Math.round(Math.min(100, Math.max(0, smoothed)));
 }
 
-export type ScoreBand = "Excellent" | "Strong" | "On Track" | "Needs Attention" | "Off Pace";
+export type ScoreBand = "Excellent" | "Strong" | "On Track" | "Needs Attention" | "Off Pace" | "Getting Started";
 
-export function getScoreBand(score: number): ScoreBand {
+export function getScoreBand(score: number, monthsSinceStart?: number): ScoreBand {
+  if ((monthsSinceStart ?? 12) < 3) return "Getting Started";
   if (score >= 90) return "Excellent";
   if (score >= 75) return "Strong";
   if (score >= 60) return "On Track";
@@ -109,7 +124,10 @@ export function getScoreTrend(score: number, previousScore: number | null): Scor
   return "stable";
 }
 
-export function getScoreRecommendation(score: number): string {
+export function getScoreRecommendation(score: number, monthsSinceStart?: number): string {
+  if ((monthsSinceStart ?? 12) < 3) {
+    return "You're getting started. Stay consistent to build your momentum.";
+  }
   if (score >= 90) {
     return "You are ahead of plan. You may consider reducing risk or reviewing your goals.";
   }
