@@ -1,4 +1,4 @@
-import { LayoutDashboard, Briefcase, ArrowLeftRight, Settings, TrendingUp, FileText } from "lucide-react";
+import { Home, LayoutDashboard, Briefcase, ArrowLeftRight, Settings, TrendingUp, FileText } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
