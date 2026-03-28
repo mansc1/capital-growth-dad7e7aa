@@ -17,6 +17,16 @@ import { OnTrackScoreCard, OnTrackScoreEmpty } from "@/components/retirement/OnT
 import { RETURN_PRESETS } from "@/lib/retirement-presets";
 import { loadPersistedState, savePersistedState } from "@/lib/retirement-storage";
 import {
+  loadActivePlan,
+  saveActivePlan,
+  loadPlanHistory,
+  pushPlanToHistory,
+  createPlan,
+  type SavedRetirementPlan,
+} from "@/lib/retirement-plan-storage";
+import { PlanStatusCard } from "@/components/retirement/PlanStatusCard";
+import { useToast } from "@/hooks/use-toast";
+import {
   computeProgressScore,
   computeConsistencyScore,
   computeMomentumScore,
