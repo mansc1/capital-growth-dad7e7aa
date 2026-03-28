@@ -10,9 +10,37 @@ export function MiniScoreHistory({ history }: MiniScoreHistoryProps) {
   if (history.length < 1) return null;
 
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
-  const delta = getWeeklyDelta(sorted);
+  const isFull = sorted.length >= 7;
 
-  // Determine which bars are in the last 7 days
+  // Early state
+  if (!isFull) {
+    return (
+      <div className="mt-3 space-y-2">
+        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+          Getting started
+        </span>
+        {sorted.length > 0 && (
+          <div className="flex items-end gap-[2px] h-8">
+            {sorted.map((point) => {
+              const heightPct = Math.max(8, point.score);
+              return (
+                <div
+                  key={point.date}
+                  className="w-2 rounded-sm bg-primary/30"
+                  style={{ height: `${heightPct}%` }}
+                  title={`${point.date}: ${point.score}`}
+                />
+              );
+            })}
+          </div>
+        )}
+        <p className="text-[10px] text-muted-foreground">Tracking your score over time</p>
+      </div>
+    );
+  }
+
+  // Full state
+  const delta = getWeeklyDelta(sorted);
   const latestDate = new Date(sorted[sorted.length - 1].date);
   const sevenDaysAgo = new Date(latestDate);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -42,15 +70,12 @@ export function MiniScoreHistory({ history }: MiniScoreHistoryProps) {
       <div className="flex items-end gap-[2px] h-8">
         {sorted.map((point) => {
           const isRecent = point.date > cutoff;
-          // Min height of 8% so low scores are still visible
           const heightPct = Math.max(8, point.score);
           return (
             <div
               key={point.date}
-              className={`flex-1 rounded-sm transition-all ${
-                isRecent
-                  ? "bg-primary/60"
-                  : "bg-primary/20"
+              className={`w-2 rounded-sm transition-all ${
+                isRecent ? "bg-primary/60" : "bg-primary/20"
               }`}
               style={{ height: `${heightPct}%` }}
               title={`${point.date}: ${point.score}`}
