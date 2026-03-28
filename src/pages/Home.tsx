@@ -59,17 +59,14 @@ const bandColors: Record<ScoreBand, string> = {
   "Getting Started": "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
 };
 
-const trendIcons = {
-  improving: TrendingUp,
-  stable: Minus,
-  declining: TrendingDown,
-} as const;
-
-const trendLabels = {
-  improving: "Improving",
-  stable: "Stable",
-  declining: "Declining",
-} as const;
+function getTargetContext(score: number, band: ScoreBand): string {
+  if (band === "Getting Started") return "Building your score history";
+  if (score >= 90) return "You're at the top — keep it up";
+  if (score >= 75) return `${90 - score} points to Excellent`;
+  if (score >= 60) return `${75 - score} points to Strong`;
+  if (score >= 45) return `${60 - score} points to On Track`;
+  return `${45 - score} points to Needs Attention`;
+}
 
 export default function Home() {
   const activePlan = useMemo(() => loadActivePlan(), []);
