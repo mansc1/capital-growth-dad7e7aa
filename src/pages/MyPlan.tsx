@@ -216,6 +216,7 @@ function MyPlanContent({ input, savedDate }: { input: SimulationInput; savedDate
         annualReturn={input.annualReturn}
         returnMode={input.returnMode}
         actualByAge={actualByAge}
+        hideComparisonToggle
       />
 
       {/* Summary Metrics */}
