@@ -82,13 +82,28 @@ export default function RetirementPlanner() {
   const [planHistory, setPlanHistory] = useState<SavedRetirementPlan[]>(loadPlanHistory);
   const { toast } = useToast();
 
+  const navigate = useNavigate();
+
+  const isDraftMatchingActive = useMemo(() => {
+    if (!activePlan) return false;
+    return JSON.stringify(input) === JSON.stringify(activePlan.input);
+  }, [input, activePlan]);
+
   const handleConfirmPlan = () => {
     const plan = createPlan(input);
     saveActivePlan(plan);
     pushPlanToHistory(plan);
     setActivePlan(plan);
     setPlanHistory(loadPlanHistory());
-    toast({ title: "Plan saved", description: "Your active plan has been updated." });
+    toast({
+      title: "Active plan updated",
+      description: "Your plan is now set.",
+      action: (
+        <Button variant="outline" size="sm" onClick={() => navigate("/my-plan")}>
+          View My Plan
+        </Button>
+      ),
+    });
   };
 
   const handleLoadPlan = (plan: SavedRetirementPlan) => {
