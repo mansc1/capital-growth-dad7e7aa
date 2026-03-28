@@ -75,6 +75,23 @@ export default function RetirementPlanner() {
     return saved ? saved.comparisonMode : false;
   });
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [activePlan, setActivePlan] = useState<SavedRetirementPlan | null>(loadActivePlan);
+  const [planHistory, setPlanHistory] = useState<SavedRetirementPlan[]>(loadPlanHistory);
+  const { toast } = useToast();
+
+  const handleConfirmPlan = () => {
+    const plan = createPlan(input);
+    saveActivePlan(plan);
+    pushPlanToHistory(plan);
+    setActivePlan(plan);
+    setPlanHistory(loadPlanHistory());
+    toast({ title: "Plan saved", description: "Your active plan has been updated." });
+  };
+
+  const handleLoadPlan = (plan: SavedRetirementPlan) => {
+    setInput(plan.input);
+    toast({ title: "Plan loaded", description: "Restored as draft. Click 'Set as My Plan' to confirm." });
+  };
 
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
