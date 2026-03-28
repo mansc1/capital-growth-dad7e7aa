@@ -183,6 +183,7 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
   }, [scoreData?.score]);
 
   const scoreHistory = useMemo(() => loadScoreHistory(), [scoreData?.score]);
+  const weeklyDelta = scoreHistory ? getWeeklyDelta(scoreHistory) : null;
 
   // Plan summary values
   const retirementRow = result.rows.find((r) => r.age === input.retirementAge);
@@ -194,8 +195,6 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
   const latestSnap = portfolioTimeSeries?.[portfolioTimeSeries.length - 1];
   const portfolioValue = latestSnap?.total_value ?? null;
   const portfolioReturn = latestSnap?.total_return_percent ?? null;
-
-  const TrendIcon = scoreData ? trendIcons[scoreData.trend] : Minus;
 
   return (
     <div className="space-y-6">
@@ -215,11 +214,29 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
                   </Badge>
                 </div>
                 <div className="flex items-center gap-1 text-sm text-muted-foreground pt-2">
-                  <TrendIcon className="h-4 w-4" />
-                  <span>{trendLabels[scoreData.trend]}</span>
+                  {weeklyDelta !== null ? (
+                    <>
+                      {weeklyDelta > 0 ? (
+                        <TrendingUp className="h-4 w-4 text-primary" />
+                      ) : weeklyDelta < 0 ? (
+                        <TrendingDown className="h-4 w-4 text-destructive" />
+                      ) : (
+                        <Minus className="h-4 w-4" />
+                      )}
+                      <span className={weeklyDelta > 0 ? "text-primary" : weeklyDelta < 0 ? "text-destructive" : ""}>
+                        {weeklyDelta > 0 ? "+" : ""}{weeklyDelta} this week
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Minus className="h-4 w-4" />
+                      <span>No change this week</span>
+                    </>
+                  )}
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">{scoreData.recommendation}</p>
+              <p className="text-xs text-muted-foreground/50">{getTargetContext(scoreData.score, scoreData.band)}</p>
               {scoreHistory && scoreHistory.length >= 1 && (
                 <MiniScoreHistory history={scoreHistory} />
               )}
