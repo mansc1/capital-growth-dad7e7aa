@@ -15,7 +15,7 @@ import {
   computeMomentumScore,
   computeOnTrackScore,
   getScoreBand,
-  getScoreTrend,
+  getScoreRecommendation,
   getScoreRecommendation,
   type ScoreBand,
 } from "@/lib/on-track-score";
@@ -170,7 +170,6 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
     return {
       score,
       band: getScoreBand(score, monthsSinceStart),
-      trend: getScoreTrend(score, previousScoreRef.current),
       recommendation: getScoreRecommendation(score, monthsSinceStart),
     };
   }, [portfolioTimeSeries, result, input.birthYear, input.savingsRanges, monthsSinceStart]);
