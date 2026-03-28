@@ -21,7 +21,7 @@ import {
   computeMomentumScore,
   computeOnTrackScore,
   getScoreBand,
-  getScoreTrend,
+  getScoreRecommendation,
   getScoreRecommendation,
 } from "@/lib/on-track-score";
 import { addScorePoint, loadScoreHistory } from "@/lib/on-track-score-history";
@@ -166,7 +166,6 @@ function MyPlanContent({ input, savedDate }: { input: SimulationInput; savedDate
     return {
       score,
       band: getScoreBand(score, monthsSinceStart),
-      trend: getScoreTrend(score, previousScoreRef.current),
       recommendation: getScoreRecommendation(score, monthsSinceStart),
     };
   }, [portfolioTimeSeries, result, input.birthYear, input.savingsRanges, monthsSinceStart]);

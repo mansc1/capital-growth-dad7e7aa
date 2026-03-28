@@ -36,7 +36,7 @@ import {
   computeMomentumScore,
   computeOnTrackScore,
   getScoreBand,
-  getScoreTrend,
+  getScoreRecommendation,
   getScoreRecommendation,
 } from "@/lib/on-track-score";
 import { addScorePoint, loadScoreHistory } from "@/lib/on-track-score-history";
@@ -270,7 +270,6 @@ export default function RetirementPlanner() {
     return {
       score,
       band: getScoreBand(score, monthsSinceStart),
-      trend: getScoreTrend(score, previousScoreRef.current),
       recommendation: getScoreRecommendation(score, monthsSinceStart),
     };
   }, [portfolioTimeSeries, baseResult, input.birthYear, input.savingsRanges, monthsSinceStart]);
