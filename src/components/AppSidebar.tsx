@@ -19,7 +19,7 @@ const navItems = [
   { title: "Holdings", url: "/holdings", icon: Briefcase },
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
   { title: "My Plan", url: "/my-plan", icon: FileText },
-  { title: "Retirement Planner", url: "/retirement-planner", icon: TrendingUp },
+  { title: "Retirement Simulation", url: "/retirement-planner", icon: TrendingUp },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
