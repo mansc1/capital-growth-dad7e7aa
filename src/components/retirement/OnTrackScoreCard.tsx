@@ -8,6 +8,7 @@ interface OnTrackScoreCardProps {
   band: ScoreBand;
   trend: ScoreTrend;
   recommendation: string;
+  subtitle?: string;
 }
 
 const bandColors: Record<ScoreBand, string> = {

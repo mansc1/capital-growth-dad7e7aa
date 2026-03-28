@@ -32,6 +32,7 @@ interface RetirementChartProps {
   annualReturn: number;
   returnMode: ReturnMode;
   actualByAge?: Map<number, number>;
+  hideComparisonToggle?: boolean;
 }
 
 const fmt = (v: number) => `฿${Math.max(0, Math.round(v)).toLocaleString("th-TH")}`;
