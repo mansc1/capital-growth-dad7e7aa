@@ -7,7 +7,7 @@ interface MiniScoreHistoryProps {
 }
 
 export function MiniScoreHistory({ history }: MiniScoreHistoryProps) {
-  if (history.length < 2) return null;
+  if (history.length < 1) return null;
 
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
   const delta = getWeeklyDelta(sorted);
