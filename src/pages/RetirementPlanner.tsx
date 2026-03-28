@@ -340,7 +340,6 @@ export default function RetirementPlanner() {
     <OnTrackScoreCard
       score={scoreData.score}
       band={scoreData.band}
-      trend={scoreData.trend}
       recommendation={scoreData.recommendation}
       subtitle="Based on your draft plan"
       history={scoreHistory}

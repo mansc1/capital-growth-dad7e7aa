@@ -185,7 +185,6 @@ function MyPlanContent({ input, savedDate }: { input: SimulationInput; savedDate
     <OnTrackScoreCard
       score={scoreData.score}
       band={scoreData.band}
-      trend={scoreData.trend}
       recommendation={scoreData.recommendation}
       subtitle="Based on your active plan"
       history={scoreHistory}
