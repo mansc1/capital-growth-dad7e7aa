@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { differenceInMonths } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
@@ -24,6 +24,7 @@ import {
   getScoreTrend,
   getScoreRecommendation,
 } from "@/lib/on-track-score";
+import { addScorePoint, loadScoreHistory } from "@/lib/on-track-score-history";
 
 const fmt = (v: number) => `฿${Math.max(0, Math.round(v)).toLocaleString("th-TH")}`;
 
@@ -170,6 +171,15 @@ function MyPlanContent({ input, savedDate }: { input: SimulationInput; savedDate
     };
   }, [portfolioTimeSeries, result, input.birthYear, input.savingsRanges, monthsSinceStart]);
 
+  // Record score to history (active plan)
+  useEffect(() => {
+    if (scoreData?.score != null) {
+      addScorePoint(Math.round(scoreData.score));
+    }
+  }, [scoreData?.score]);
+
+  const scoreHistory = useMemo(() => loadScoreHistory(), [scoreData?.score]);
+
   const scoreCard = scoreData ? (
     <OnTrackScoreCard
       score={scoreData.score}
@@ -177,6 +187,7 @@ function MyPlanContent({ input, savedDate }: { input: SimulationInput; savedDate
       trend={scoreData.trend}
       recommendation={scoreData.recommendation}
       subtitle="Based on your active plan"
+      history={scoreHistory}
     />
   ) : portfolioTimeSeries?.length ? null : (
     <OnTrackScoreEmpty />

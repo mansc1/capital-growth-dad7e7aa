@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { differenceInMonths } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
@@ -39,6 +39,7 @@ import {
   getScoreTrend,
   getScoreRecommendation,
 } from "@/lib/on-track-score";
+import { addScorePoint, loadScoreHistory } from "@/lib/on-track-score-history";
 import {
   runSimulation,
   validateInputs,
@@ -325,6 +326,15 @@ export default function RetirementPlanner() {
     </>
   );
 
+  // Record score to history (active plan only — skip if draft differs)
+  useEffect(() => {
+    if (scoreData?.score != null && isDraftMatchingActive) {
+      addScorePoint(Math.round(scoreData.score));
+    }
+  }, [scoreData?.score, isDraftMatchingActive]);
+
+  const scoreHistory = useMemo(() => loadScoreHistory(), [scoreData?.score]);
+
   const scoreCard = scoreData ? (
     <OnTrackScoreCard
       score={scoreData.score}
@@ -332,6 +342,7 @@ export default function RetirementPlanner() {
       trend={scoreData.trend}
       recommendation={scoreData.recommendation}
       subtitle="Based on your draft plan"
+      history={scoreHistory}
     />
   ) : portfolioTimeSeries?.length ? null : (
     <OnTrackScoreEmpty />
