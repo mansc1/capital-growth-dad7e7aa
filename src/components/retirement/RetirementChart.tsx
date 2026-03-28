@@ -142,6 +142,7 @@ export function RetirementChart({
   annualReturn,
   returnMode,
   actualByAge,
+  hideComparisonToggle,
 }: RetirementChartProps) {
   const scenarios = useMemo(() => {
     if (!comparisonMode || !comparisonResults?.length) return [];
