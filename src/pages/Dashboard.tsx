@@ -59,7 +59,7 @@ export default function Dashboard() {
       <AppLayout>
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
             <p className="text-sm text-muted-foreground mt-1">Your portfolio at a glance</p>
           </div>
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
