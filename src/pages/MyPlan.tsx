@@ -22,7 +22,6 @@ import {
   computeOnTrackScore,
   getScoreBand,
   getScoreRecommendation,
-  getScoreRecommendation,
 } from "@/lib/on-track-score";
 import { addScorePoint, loadScoreHistory } from "@/lib/on-track-score-history";
 
