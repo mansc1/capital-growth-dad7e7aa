@@ -1,6 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { ScoreBand, ScoreTrend } from "@/lib/on-track-score";
+import type { ScoreHistory } from "@/lib/on-track-score-history";
+import { MiniScoreHistory } from "./MiniScoreHistory";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface OnTrackScoreCardProps {
@@ -9,6 +11,7 @@ interface OnTrackScoreCardProps {
   trend: ScoreTrend;
   recommendation: string;
   subtitle?: string;
+  history?: ScoreHistory;
 }
 
 const bandColors: Record<ScoreBand, string> = {
@@ -26,7 +29,7 @@ const trendConfig: Record<ScoreTrend, { icon: typeof TrendingUp; label: string }
   declining: { icon: TrendingDown, label: "Declining" },
 };
 
-export function OnTrackScoreCard({ score, band, trend, recommendation, subtitle }: OnTrackScoreCardProps) {
+export function OnTrackScoreCard({ score, band, trend, recommendation, subtitle, history }: OnTrackScoreCardProps) {
   const TrendIcon = trendConfig[trend].icon;
 
   return (
@@ -49,6 +52,7 @@ export function OnTrackScoreCard({ score, band, trend, recommendation, subtitle 
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{recommendation}</p>
         {subtitle && <p className="mt-1 text-xs text-muted-foreground/60">{subtitle}</p>}
+        {history && history.length >= 2 && <MiniScoreHistory history={history} />}
       </CardContent>
     </Card>
   );
