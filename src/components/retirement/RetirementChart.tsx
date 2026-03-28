@@ -197,8 +197,12 @@ export function RetirementChart({
       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
         <CardTitle className="text-lg">Retirement Balance Projection</CardTitle>
         <div className="flex items-center gap-2">
-          <Label htmlFor="comparison" className="text-sm text-muted-foreground">Compare Scenarios</Label>
-          <Switch id="comparison" checked={comparisonMode} onCheckedChange={onToggleComparison} />
+          {!hideComparisonToggle && (
+            <>
+              <Label htmlFor="comparison" className="text-sm text-muted-foreground">Compare Scenarios</Label>
+              <Switch id="comparison" checked={comparisonMode} onCheckedChange={onToggleComparison} />
+            </>
+          )}
         </div>
       </CardHeader>
       <CardContent>
