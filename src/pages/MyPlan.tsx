@@ -176,6 +176,7 @@ function MyPlanContent({ input, savedDate }: { input: SimulationInput; savedDate
       band={scoreData.band}
       trend={scoreData.trend}
       recommendation={scoreData.recommendation}
+      subtitle="Based on your active plan"
     />
   ) : portfolioTimeSeries?.length ? null : (
     <OnTrackScoreEmpty />

@@ -1,7 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { differenceInMonths } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CheckCircle2, Info, Sparkles } from "lucide-react";
 import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { AssumptionsPanel } from "@/components/retirement/AssumptionsPanel";
 import { SavingsPlanEditor } from "@/components/retirement/SavingsPlanEditor";
