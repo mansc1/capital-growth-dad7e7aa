@@ -12,7 +12,7 @@ export function MiniScoreHistory({ history }: MiniScoreHistoryProps) {
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
   const isFull = sorted.length >= 7;
 
-  // Early state
+  // Early state — dots only
   if (!isFull) {
     return (
       <div className="mt-3 space-y-2">
@@ -20,18 +20,14 @@ export function MiniScoreHistory({ history }: MiniScoreHistoryProps) {
           Getting started
         </span>
         {sorted.length > 0 && (
-          <div className="flex items-end gap-[2px] h-8">
-            {sorted.map((point) => {
-              const heightPct = Math.max(8, point.score);
-              return (
-                <div
-                  key={point.date}
-                  className="w-2 rounded-sm bg-primary/30"
-                  style={{ height: `${heightPct}%` }}
-                  title={`${point.date}: ${point.score}`}
-                />
-              );
-            })}
+          <div className="flex items-center gap-2 h-8">
+            {sorted.map((point) => (
+              <div
+                key={point.date}
+                className="w-2 h-2 rounded-full bg-primary/40"
+                title={`${point.date}: ${point.score}`}
+              />
+            ))}
           </div>
         )}
         <p className="text-[10px] text-muted-foreground">Tracking your score over time</p>
@@ -39,12 +35,25 @@ export function MiniScoreHistory({ history }: MiniScoreHistoryProps) {
     );
   }
 
-  // Full state
+  // Full state — SVG sparkline
   const delta = getWeeklyDelta(sorted);
-  const latestDate = new Date(sorted[sorted.length - 1].date);
-  const sevenDaysAgo = new Date(latestDate);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const cutoff = sevenDaysAgo.toISOString().slice(0, 10);
+  const scores = sorted.map((p) => p.score);
+  const minScore = Math.min(...scores);
+  const maxScore = Math.max(...scores);
+  const padding = 4;
+  const range = maxScore === minScore ? 10 : maxScore - minScore;
+  const h = 32;
+  const w = sorted.length * 12;
+
+  const points = sorted.map((p, i) => {
+    const x = (i / (sorted.length - 1)) * (w - padding * 2) + padding;
+    const y = h - padding - ((p.score - minScore) / range) * (h - padding * 2);
+    return { x, y };
+  });
+
+  const polyline = points.map((p) => `${p.x},${p.y}`).join(" ");
+  const last = points[points.length - 1];
+  const fillPath = `M${points[0].x},${h} ${points.map((p) => `L${p.x},${p.y}`).join(" ")} L${last.x},${h} Z`;
 
   return (
     <div className="mt-3 space-y-2">
@@ -67,22 +76,11 @@ export function MiniScoreHistory({ history }: MiniScoreHistoryProps) {
           </span>
         )}
       </div>
-      <div className="flex items-end gap-[2px] h-8">
-        {sorted.map((point) => {
-          const isRecent = point.date > cutoff;
-          const heightPct = Math.max(8, point.score);
-          return (
-            <div
-              key={point.date}
-              className={`w-2 rounded-sm transition-all ${
-                isRecent ? "bg-primary/60" : "bg-primary/20"
-              }`}
-              style={{ height: `${heightPct}%` }}
-              title={`${point.date}: ${point.score}`}
-            />
-          );
-        })}
-      </div>
+      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="overflow-visible">
+        <path d={fillPath} className="fill-primary/10" />
+        <polyline points={polyline} fill="none" className="stroke-primary/50" strokeWidth="1.5" strokeLinejoin="round" />
+        <circle cx={last.x} cy={last.y} r="3" className="fill-primary" />
+      </svg>
     </div>
   );
 }

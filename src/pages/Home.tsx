@@ -19,7 +19,7 @@ import {
   getScoreRecommendation,
   type ScoreBand,
 } from "@/lib/on-track-score";
-import { addScorePoint, loadScoreHistory } from "@/lib/on-track-score-history";
+import { addScorePoint, loadScoreHistory, getWeeklyDelta } from "@/lib/on-track-score-history";
 import { formatCurrency } from "@/lib/format";
 import {
   TrendingUp,
