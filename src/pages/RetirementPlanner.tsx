@@ -4,6 +4,7 @@ import { differenceInMonths } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { CheckCircle2, Info, Sparkles } from "lucide-react";
 import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { AssumptionsPanel } from "@/components/retirement/AssumptionsPanel";
