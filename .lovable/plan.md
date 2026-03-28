@@ -1,79 +1,64 @@
-## Create Score-First Home Page (VO₂ Max Style)
+## Upgrade On Track Score to Feel Alive (Delta + Trend + Target)
 
 ### Summary
 
-Create a new Home page at `/` centered on the On Track Score hero, push existing Dashboard to `/dashboard`, and update sidebar navigation.
+Replace the static "Improving/Stable/Declining" trend label with a concrete weekly delta number, add a target context line, and improve MiniScoreHistory with a connected dot sparkline instead of plain bars.
 
 ### Changes
 
-**1. `src/pages/Home.tsx**` — New score-first home page
+**1. `src/components/retirement/OnTrackScoreCard.tsx**` — Replace trend label with weekly delta + add target context
 
-- Hero section: "ON TRACK SCORE" label, large score number (`text-5xl font-bold`), band badge, trend icon, `MiniScoreHistory`
-- Recommendation text from `getScoreRecommendation()`
-- Plan summary card: Balance at Retirement, Money runs out at age (from `runSimulation` on active plan)
-- Quick actions: "View My Plan" → `/my-plan`, "Edit Plan" → `/retirement-planner`, "View Portfolio" → `/dashboard`
-- Portfolio mini card: latest portfolio value, return %, using `usePortfolioTimeSeries`
-- Empty state (no active plan): CTA "Create your retirement plan" linking to `/retirement-planner`
-- Empty state (no portfolio): show score section if plan exists, portfolio card shows "No portfolio data"
-- Reuses: `loadActivePlan`, `runSimulation`, `usePortfolioTimeSeries`, score computation logic from MyPlan pattern, `OnTrackScoreCard` components, `loadScoreHistory`
+- Import `getWeeklyDelta`, `loadScoreHistory` internally (or accept delta as prop)
+- Replace the trend icon+label area with weekly delta display:
+  - `+3 this week` (green), `−2 this week` (red), `No change this week` (muted)
+  - Still use TrendingUp/Down/Minus icons based on delta sign
+- Add a target context line below recommendation:
+  - Compute next band threshold from score (e.g. score 64 → "16 points to reach Strong")
+  - If already Excellent: "You're at the top — keep it up"
+  - Helper function `getTargetContext(score, band): string`
 
-**2. `src/App.tsx**` — Route changes
+**2. `src/components/retirement/MiniScoreHistory.tsx**` — Replace bars with dot sparkline
 
-- `"/"` → `Home` (new)
-- `"/dashboard"` → `Dashboard` (existing, moved from `/`)
-- Remove Index import (no longer needed)
+- Full state (>=7 points): Replace bar chart with an SVG sparkline
+  - Polyline connecting score values
+  - Small circle on the last point (highlighted)
+  - Subtle fill below the line (primary/10)
+  - Fixed height (32px), width fills container
+  - Y-axis auto-scales to min/max of data with padding
+- Early state (<7 points): Keep "Getting started" label, render dots only (small circles, no line) left-aligned
+- Weekly delta display stays in the header (already there)
 
-**3. `src/components/AppSidebar.tsx**` — Navigation update
+**3. `src/pages/Home.tsx**` — Replace trend label with weekly delta in hero
 
-- Add "Home" as first item (`/`, icon: `Home` from lucide)
-- Rename "Dashboard" to "Portfolio" (url: `/dashboard`)
-- Keep all other items unchanged
+- Compute `weeklyDelta` from `getWeeklyDelta(scoreHistory)`
+- Replace the `trendLabels[scoreData.trend]` display with delta text (same format as OnTrackScoreCard)
+- Add target context line below recommendation
 
-**4. `src/pages/Dashboard.tsx**` — Minor text update
-
-- Change header from "Dashboard" to "Portfolio" to match sidebar rename
-
-### Data flow (Home page)
+### Target context logic (in OnTrackScoreCard or a small helper)
 
 ```text
-loadActivePlan() → runSimulation(input) → result.rows
-usePortfolioTimeSeries("SINCE_START") → score computation (same pattern as MyPlan)
-loadScoreHistory() → MiniScoreHistory
+score >= 90 → "You're at the top — keep it up"
+score >= 75 → "{90 - score} points to Excellent"
+score >= 60 → "{75 - score} points to Strong"
+score >= 45 → "{60 - score} points to On Track"
+else        → "{45 - score} points to Needs Attention"
+Getting Started band → "Building your score history"
 ```
-
-Score recording on Home follows same rule as MyPlan — only records when viewing active plan data.
 
 ### What stays unchanged
 
-- All existing pages (Dashboard/MyPlan/RetirementPlanner) — logic and layout intact
-- Score computation logic, simulation engine
-- All hooks, storage helpers
-  &nbsp;
+- Score computation logic, storage, simulation
+- MiniScoreHistory weekly delta calculation (reused)
+- All other pages and components
 
 Additional guard rails:
 
-- Keep role separation clear:
+- Prefer passing `history` or `weeklyDelta` into OnTrackScoreCard as props instead of loading score history inside the card itself. Keep data flow page-owned and explicit.
 
-  Home = daily score check-in,
+- Ensure weekly delta always uses the same score-history context as the displayed score (especially active-plan history on Home and My Plan).
 
-  My Plan = full confirmed plan details,
+- In MiniScoreHistory sparkline, guard against min === max so a flat score history still renders correctly with sensible padding.
 
-  Retirement Planner = edit/simulate workspace.
+- Keep visual hierarchy clear: score first, weekly delta second, recommendation third, target context fourth. Target context should be more muted than recommendation.
 
-  Do not let Home become a duplicate of My Plan.
-
-- Home score must use ACTIVE plan data only.
-
-  If no active plan exists, show onboarding CTA only and do not compute score from draft inputs.
-
-- Home should use the same active-plan score history as My Plan only.
-
-  Do not mix in draft score history from Retirement Planner.
-
-- Because Home becomes "/", verify all internal navigation and buttons that previously implied Dashboard now correctly point to "/dashboard".
-
-- Make Home fail-soft:
-
-  if active plan exists but portfolio data is unavailable, still render the score/plan section and show a graceful "No portfolio data" state for portfolio-related cards.
-
-- After renaming Dashboard to Portfolio, ensure wording is consistent everywhere in the UI so users do not see both names mixed.
+- If band is "Getting Started", always override target context with "Building your score history" instead of calculating points to the next band.
