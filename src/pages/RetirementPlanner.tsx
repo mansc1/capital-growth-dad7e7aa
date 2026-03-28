@@ -269,6 +269,13 @@ export default function RetirementPlanner() {
 
   const inputSections = (
     <>
+      <PlanStatusCard
+        input={input}
+        activePlan={activePlan}
+        history={planHistory}
+        onConfirm={handleConfirmPlan}
+        onLoadPlan={handleLoadPlan}
+      />
       <div id="section-assumptions" className="scroll-mt-24">
         <AssumptionsPanel input={input} errors={errors} onChange={handleFieldChange} />
       </div>
