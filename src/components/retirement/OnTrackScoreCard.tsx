@@ -52,7 +52,7 @@ export function OnTrackScoreCard({ score, band, trend, recommendation, subtitle,
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{recommendation}</p>
         {subtitle && <p className="mt-1 text-xs text-muted-foreground/60">{subtitle}</p>}
-        {history && history.length >= 2 && <MiniScoreHistory history={history} />}
+        {history && history.length >= 1 && <MiniScoreHistory history={history} />}
       </CardContent>
     </Card>
   );

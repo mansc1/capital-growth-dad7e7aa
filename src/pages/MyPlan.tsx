@@ -179,6 +179,7 @@ function MyPlanContent({ input, savedDate }: { input: SimulationInput; savedDate
   }, [scoreData?.score]);
 
   const scoreHistory = useMemo(() => loadScoreHistory(), [scoreData?.score]);
+  console.log("Score history:", scoreHistory);
 
   const scoreCard = scoreData ? (
     <OnTrackScoreCard

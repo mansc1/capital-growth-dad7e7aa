@@ -334,6 +334,7 @@ export default function RetirementPlanner() {
   }, [scoreData?.score, isDraftMatchingActive]);
 
   const scoreHistory = useMemo(() => loadScoreHistory(), [scoreData?.score]);
+  console.log("Score history:", scoreHistory);
 
   const scoreCard = scoreData ? (
     <OnTrackScoreCard
