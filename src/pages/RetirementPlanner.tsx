@@ -12,8 +12,18 @@ import { SummaryMetrics } from "@/components/retirement/SummaryMetrics";
 import { YearlyDetailsTable } from "@/components/retirement/YearlyDetailsTable";
 import { MiniProjectionPanel } from "@/components/retirement/MiniProjectionPanel";
 import { ProjectionSheet } from "@/components/retirement/ProjectionSheet";
+import { OnTrackScoreCard, OnTrackScoreEmpty } from "@/components/retirement/OnTrackScoreCard";
 import { RETURN_PRESETS } from "@/lib/retirement-presets";
 import { loadPersistedState, savePersistedState } from "@/lib/retirement-storage";
+import {
+  computeProgressScore,
+  computeConsistencyScore,
+  computeMomentumScore,
+  computeOnTrackScore,
+  getScoreBand,
+  getScoreTrend,
+  getScoreRecommendation,
+} from "@/lib/on-track-score";
 import {
   runSimulation,
   validateInputs,
@@ -100,7 +110,6 @@ export default function RetirementPlanner() {
       const year = parseInt(snap.snapshot_date.slice(0, 4));
       const age = year - input.birthYear;
       if (age > currentAge || age < 0) continue;
-      // Keep last value per year (data is sorted by date)
       byYear.set(age, snap.total_value);
     }
     return byYear.size > 0 ? byYear : undefined;
@@ -130,6 +139,93 @@ export default function RetirementPlanner() {
       result: runSimulation({ ...input, annualReturn: rate }),
     }));
   }, [input, valid, comparisonMode]);
+
+  // --- On Track Score ---
+  const previousScoreRef = useRef<number | null>(null);
+
+  const scoreData = useMemo(() => {
+    if (!portfolioTimeSeries?.length || !baseResult) return null;
+
+    const currentAge = new Date().getFullYear() - input.birthYear;
+
+    // Use latest portfolio time series point as actual value
+    const latestSnap = portfolioTimeSeries[portfolioTimeSeries.length - 1];
+    const actualValue = latestSnap.total_value;
+
+    // Find projected balance at current age
+    const projectedRow = baseResult.rows.find((r) => r.age === currentAge);
+    const projectedValue = projectedRow?.endBalance ?? null;
+
+    if (!projectedValue || projectedValue <= 0) return null;
+
+    // Progress
+    const progress = computeProgressScore(actualValue, projectedValue);
+    const ratioNow = actualValue / projectedValue;
+
+    // Consistency: derive monthly contributions from net_flow
+    const monthlyContribs: number[] = [];
+    const monthMap = new Map<string, number>();
+    for (const snap of portfolioTimeSeries) {
+      const monthKey = snap.snapshot_date.slice(0, 7); // YYYY-MM
+      const flow = Math.max(snap.net_flow ?? 0, 0); // clamp negative
+      monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + flow);
+    }
+    const sortedMonths = Array.from(monthMap.keys()).sort();
+    for (const m of sortedMonths) {
+      monthlyContribs.push(monthMap.get(m)!);
+    }
+
+    // Planned monthly from savings ranges for current age
+    const currentRange = input.savingsRanges.find(
+      (r) => currentAge >= r.startAge && currentAge <= r.endAge
+    );
+    const plannedMonthly = currentRange?.monthlySavings ?? 0;
+
+    const consistency = computeConsistencyScore(
+      monthlyContribs,
+      plannedMonthly,
+      sortedMonths.length,
+    );
+
+    // Momentum: ratio ~6 months ago
+    let ratio6mAgo: number | null = null;
+    if (portfolioTimeSeries.length > 1) {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const targetDate = sixMonthsAgo.toISOString().slice(0, 10);
+      // Find closest snapshot to 6 months ago
+      let closest = portfolioTimeSeries[0];
+      for (const snap of portfolioTimeSeries) {
+        if (snap.snapshot_date <= targetDate) closest = snap;
+        else break;
+      }
+      if (closest.snapshot_date !== latestSnap.snapshot_date) {
+        const closestAge = parseInt(closest.snapshot_date.slice(0, 4)) - input.birthYear;
+        const projRow6m = baseResult.rows.find((r) => r.age === closestAge);
+        if (projRow6m && projRow6m.endBalance > 0) {
+          ratio6mAgo = closest.total_value / projRow6m.endBalance;
+        }
+      }
+    }
+
+    const momentum = computeMomentumScore(ratioNow, ratio6mAgo);
+
+    const score = computeOnTrackScore({
+      progress,
+      consistency,
+      momentum,
+      previousScore: previousScoreRef.current,
+    });
+
+    previousScoreRef.current = score;
+
+    return {
+      score,
+      band: getScoreBand(score),
+      trend: getScoreTrend(score, previousScoreRef.current),
+      recommendation: getScoreRecommendation(score),
+    };
+  }, [portfolioTimeSeries, baseResult, input.birthYear, input.savingsRanges]);
 
   const chartProps = {
     baseResult: baseResult!,
@@ -175,6 +271,17 @@ export default function RetirementPlanner() {
     </>
   );
 
+  const scoreCard = scoreData ? (
+    <OnTrackScoreCard
+      score={scoreData.score}
+      band={scoreData.band}
+      trend={scoreData.trend}
+      recommendation={scoreData.recommendation}
+    />
+  ) : portfolioTimeSeries?.length ? null : (
+    <OnTrackScoreEmpty />
+  );
+
   return (
     <AppLayout>
       <div className="mb-8">
@@ -191,6 +298,7 @@ export default function RetirementPlanner() {
         {baseResult && (
           <div className="lg:col-span-5">
             <div className="sticky top-8 space-y-4">
+              {scoreCard}
               <RetirementChart {...chartProps} />
               <SummaryMetrics
                 result={baseResult}
@@ -208,7 +316,8 @@ export default function RetirementPlanner() {
         {baseResult && !sheetOpen && (
           <MiniProjectionPanel result={baseResult} onClick={() => setSheetOpen(true)} />
         )}
-        <div className="space-y-6">{inputSections}</div>
+        {scoreCard}
+        <div className="space-y-6 mt-4">{inputSections}</div>
       </div>
 
       <p className="mt-8 text-center text-xs text-muted-foreground">
