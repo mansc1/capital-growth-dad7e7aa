@@ -15,11 +15,10 @@ import {
   computeMomentumScore,
   computeOnTrackScore,
   getScoreBand,
-  getScoreTrend,
   getScoreRecommendation,
   type ScoreBand,
 } from "@/lib/on-track-score";
-import { addScorePoint, loadScoreHistory } from "@/lib/on-track-score-history";
+import { addScorePoint, loadScoreHistory, getWeeklyDelta } from "@/lib/on-track-score-history";
 import { formatCurrency } from "@/lib/format";
 import {
   TrendingUp,
@@ -59,17 +58,14 @@ const bandColors: Record<ScoreBand, string> = {
   "Getting Started": "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
 };
 
-const trendIcons = {
-  improving: TrendingUp,
-  stable: Minus,
-  declining: TrendingDown,
-} as const;
-
-const trendLabels = {
-  improving: "Improving",
-  stable: "Stable",
-  declining: "Declining",
-} as const;
+function getTargetContext(score: number, band: ScoreBand): string {
+  if (band === "Getting Started") return "Building your score history";
+  if (score >= 90) return "You're at the top — keep it up";
+  if (score >= 75) return `${90 - score} points to Excellent`;
+  if (score >= 60) return `${75 - score} points to Strong`;
+  if (score >= 45) return `${60 - score} points to On Track`;
+  return `${45 - score} points to Needs Attention`;
+}
 
 export default function Home() {
   const activePlan = useMemo(() => loadActivePlan(), []);
@@ -173,7 +169,6 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
     return {
       score,
       band: getScoreBand(score, monthsSinceStart),
-      trend: getScoreTrend(score, previousScoreRef.current),
       recommendation: getScoreRecommendation(score, monthsSinceStart),
     };
   }, [portfolioTimeSeries, result, input.birthYear, input.savingsRanges, monthsSinceStart]);
@@ -186,6 +181,7 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
   }, [scoreData?.score]);
 
   const scoreHistory = useMemo(() => loadScoreHistory(), [scoreData?.score]);
+  const weeklyDelta = scoreHistory ? getWeeklyDelta(scoreHistory) : null;
 
   // Plan summary values
   const retirementRow = result.rows.find((r) => r.age === input.retirementAge);
@@ -197,8 +193,6 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
   const latestSnap = portfolioTimeSeries?.[portfolioTimeSeries.length - 1];
   const portfolioValue = latestSnap?.total_value ?? null;
   const portfolioReturn = latestSnap?.total_return_percent ?? null;
-
-  const TrendIcon = scoreData ? trendIcons[scoreData.trend] : Minus;
 
   return (
     <div className="space-y-6">
@@ -218,11 +212,29 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
                   </Badge>
                 </div>
                 <div className="flex items-center gap-1 text-sm text-muted-foreground pt-2">
-                  <TrendIcon className="h-4 w-4" />
-                  <span>{trendLabels[scoreData.trend]}</span>
+                  {weeklyDelta !== null ? (
+                    <>
+                      {weeklyDelta > 0 ? (
+                        <TrendingUp className="h-4 w-4 text-primary" />
+                      ) : weeklyDelta < 0 ? (
+                        <TrendingDown className="h-4 w-4 text-destructive" />
+                      ) : (
+                        <Minus className="h-4 w-4" />
+                      )}
+                      <span className={weeklyDelta > 0 ? "text-primary" : weeklyDelta < 0 ? "text-destructive" : ""}>
+                        {weeklyDelta > 0 ? "+" : ""}{weeklyDelta} this week
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Minus className="h-4 w-4" />
+                      <span>No change this week</span>
+                    </>
+                  )}
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">{scoreData.recommendation}</p>
+              <p className="text-xs text-muted-foreground/50">{getTargetContext(scoreData.score, scoreData.band)}</p>
               {scoreHistory && scoreHistory.length >= 1 && (
                 <MiniScoreHistory history={scoreHistory} />
               )}

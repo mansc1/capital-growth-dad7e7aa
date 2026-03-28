@@ -1,14 +1,14 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { ScoreBand, ScoreTrend } from "@/lib/on-track-score";
+import type { ScoreBand } from "@/lib/on-track-score";
 import type { ScoreHistory } from "@/lib/on-track-score-history";
+import { getWeeklyDelta } from "@/lib/on-track-score-history";
 import { MiniScoreHistory } from "./MiniScoreHistory";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface OnTrackScoreCardProps {
   score: number;
   band: ScoreBand;
-  trend: ScoreTrend;
   recommendation: string;
   subtitle?: string;
   history?: ScoreHistory;
@@ -23,14 +23,17 @@ const bandColors: Record<ScoreBand, string> = {
   "Getting Started": "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
 };
 
-const trendConfig: Record<ScoreTrend, { icon: typeof TrendingUp; label: string }> = {
-  improving: { icon: TrendingUp, label: "Improving" },
-  stable: { icon: Minus, label: "Stable" },
-  declining: { icon: TrendingDown, label: "Declining" },
-};
+function getTargetContext(score: number, band: ScoreBand): string {
+  if (band === "Getting Started") return "Building your score history";
+  if (score >= 90) return "You're at the top — keep it up";
+  if (score >= 75) return `${90 - score} points to Excellent`;
+  if (score >= 60) return `${75 - score} points to Strong`;
+  if (score >= 45) return `${60 - score} points to On Track`;
+  return `${45 - score} points to Needs Attention`;
+}
 
-export function OnTrackScoreCard({ score, band, trend, recommendation, subtitle, history }: OnTrackScoreCardProps) {
-  const TrendIcon = trendConfig[trend].icon;
+export function OnTrackScoreCard({ score, band, recommendation, subtitle, history }: OnTrackScoreCardProps) {
+  const weeklyDelta = history ? getWeeklyDelta(history) : null;
 
   return (
     <Card>
@@ -46,11 +49,29 @@ export function OnTrackScoreCard({ score, band, trend, recommendation, subtitle,
             </div>
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground pt-1">
-            <TrendIcon className="h-3.5 w-3.5" />
-            <span>{trendConfig[trend].label}</span>
+            {weeklyDelta !== null ? (
+              <>
+                {weeklyDelta > 0 ? (
+                  <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                ) : weeklyDelta < 0 ? (
+                  <TrendingDown className="h-3.5 w-3.5 text-destructive" />
+                ) : (
+                  <Minus className="h-3.5 w-3.5" />
+                )}
+                <span className={weeklyDelta > 0 ? "text-primary" : weeklyDelta < 0 ? "text-destructive" : ""}>
+                  {weeklyDelta > 0 ? "+" : ""}{weeklyDelta} this week
+                </span>
+              </>
+            ) : (
+              <>
+                <Minus className="h-3.5 w-3.5" />
+                <span>No change this week</span>
+              </>
+            )}
           </div>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{recommendation}</p>
+        <p className="mt-1 text-xs text-muted-foreground/50">{getTargetContext(score, band)}</p>
         {subtitle && <p className="mt-1 text-xs text-muted-foreground/60">{subtitle}</p>}
         {history && history.length >= 1 && <MiniScoreHistory history={history} />}
       </CardContent>
