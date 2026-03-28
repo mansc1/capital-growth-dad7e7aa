@@ -1,129 +1,79 @@
-## Fix Mini Score History Visual for Insufficient Data
+## Create Score-First Home Page (VO₂ Max Style)
 
 ### Summary
 
-Update `MiniScoreHistory.tsx` to show a "Getting started" state when fewer than 7 data points exist, and use fixed-width bars instead of `flex-1` to prevent stretching.
+Create a new Home page at `/` centered on the On Track Score hero, push existing Dashboard to `/dashboard`, and update sidebar navigation.
 
-### Changes — `src/components/retirement/MiniScoreHistory.tsx`
+### Changes
 
-**1. Early state (history < 7 points)**
+**1. `src/pages/Home.tsx**` — New score-first home page
 
-- Replace bar chart with: label "Getting started" + helper "Tracking your score over time"
-- If 1–6 points exist, render them as small fixed-width bars (not stretched), left-aligned
+- Hero section: "ON TRACK SCORE" label, large score number (`text-5xl font-bold`), band badge, trend icon, `MiniScoreHistory`
+- Recommendation text from `getScoreRecommendation()`
+- Plan summary card: Balance at Retirement, Money runs out at age (from `runSimulation` on active plan)
+- Quick actions: "View My Plan" → `/my-plan`, "Edit Plan" → `/retirement-planner`, "View Portfolio" → `/dashboard`
+- Portfolio mini card: latest portfolio value, return %, using `usePortfolioTimeSeries`
+- Empty state (no active plan): CTA "Create your retirement plan" linking to `/retirement-planner`
+- Empty state (no portfolio): show score section if plan exists, portfolio card shows "No portfolio data"
+- Reuses: `loadActivePlan`, `runSimulation`, `usePortfolioTimeSeries`, score computation logic from MyPlan pattern, `OnTrackScoreCard` components, `loadScoreHistory`
 
-**2. Full state (history >= 7 points)**
+**2. `src/App.tsx**` — Route changes
 
-- Render existing "Last 4 weeks" label, full bar chart, weekly delta — unchanged logic
+- `"/"` → `Home` (new)
+- `"/dashboard"` → `Dashboard` (existing, moved from `/`)
+- Remove Index import (no longer needed)
 
-**3. Bar width fix (both states)**
+**3. `src/components/AppSidebar.tsx**` — Navigation update
 
-- Replace `flex-1` on each bar with fixed width (`w-1.5`) and keep `gap-[2px]`
-- Container uses `flex items-end` without stretching — bars cluster left when few
+- Add "Home" as first item (`/`, icon: `Home` from lucide)
+- Rename "Dashboard" to "Portfolio" (url: `/dashboard`)
+- Keep all other items unchanged
+
+**4. `src/pages/Dashboard.tsx**` — Minor text update
+
+- Change header from "Dashboard" to "Portfolio" to match sidebar rename
+
+### Data flow (Home page)
+
+```text
+loadActivePlan() → runSimulation(input) → result.rows
+usePortfolioTimeSeries("SINCE_START") → score computation (same pattern as MyPlan)
+loadScoreHistory() → MiniScoreHistory
+```
+
+Score recording on Home follows same rule as MyPlan — only records when viewing active plan data.
 
 ### What stays unchanged
 
-- Storage logic, scoring, all other components
-- Weekly delta calculation, highlight logic for last 7 days  
+- All existing pages (Dashboard/MyPlan/RetirementPlanner) — logic and layout intact
+- Score computation logic, simulation engine
+- All hooks, storage helpers
+  &nbsp;
 
+Additional guard rails:
 
-Polish Mini Score History — Early State UX Refinements
+- Keep role separation clear:
 
-Context
+  Home = daily score check-in,
 
-Mini Score History now supports:
+  My Plan = full confirmed plan details,
 
-- "Getting started" state when history < 7
+  Retirement Planner = edit/simulate workspace.
 
-- Fixed-width bars (no stretching)
+  Do not let Home become a duplicate of My Plan.
 
-- Full chart when history >= 7
+- Home score must use ACTIVE plan data only.
 
-Goal
+  If no active plan exists, show onboarding CTA only and do not compute score from draft inputs.
 
-Refine early-state UX to ensure clarity and consistency.
+- Home should use the same active-plan score history as My Plan only.
 
-------------------------------------------------
+  Do not mix in draft score history from Retirement Planner.
 
-1) Ensure correct label usage
+- Because Home becomes "/", verify all internal navigation and buttons that previously implied Dashboard now correctly point to "/dashboard".
 
-When history.length < 7:
+- Make Home fail-soft:
 
-- ALWAYS show label:
+  if active plan exists but portfolio data is unavailable, still render the score/plan section and show a graceful "No portfolio data" state for portfolio-related cards.
 
-  "Getting started"
-
-- NEVER show:
-
-  "Last 4 weeks"
-
-- Even if there are 1–6 data points with mini bars,
-
-  the label must remain "Getting started"
-
-Reason:
-
-Avoid misleading users into thinking they already have full history
-
-------------------------------------------------
-
-2) Use safe Tailwind width class
-
-For bar width:
-
-- Replace `w-1.5` with a safe class:
-
-  use `w-1` or `w-2`
-
-Reason:
-
-`w-1.5` may not exist in default Tailwind config and could break rendering
-
-------------------------------------------------
-
-3) Handle empty history cleanly
-
-When history.length === 0:
-
-- Show only:
-
-  "Getting started"
-
-  "Tracking your score over time"
-
-- DO NOT render:
-
-  - any bars
-
-  - placeholders
-
-  - empty chart container
-
-Reason:
-
-Avoid visual noise and keep UI clean for first-time users
-
-------------------------------------------------
-
-Success Criteria
-
-1. 0 data points → text only, clean state
-
-2. 1–6 points → "Getting started" + small bars (left-aligned, fixed width)
-
-3. ≥7 points → full chart with "Last 4 weeks" and weekly delta
-
-4. No misleading labels at any stage
-
-5. No dependency on non-standard Tailwind classes
-
-------------------------------------------------
-
-Outcome
-
-Mini Score History becomes:
-
-- accurate from day 1
-
-- visually honest
-
-- progressively enhanced as data grows
+- After renaming Dashboard to Portfolio, ensure wording is consistent everywhere in the UI so users do not see both names mixed.
