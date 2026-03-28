@@ -9,6 +9,7 @@ import Transactions from "./pages/Transactions";
 import FundDetail from "./pages/FundDetail";
 import SettingsPage from "./pages/Settings";
 import RetirementPlanner from "./pages/RetirementPlanner";
+import MyPlan from "./pages/MyPlan";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/funds/:id" element={<FundDetail />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/my-plan" element={<MyPlan />} />
           <Route path="/retirement-planner" element={<RetirementPlanner />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
