@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { differenceInMonths } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
@@ -143,31 +144,33 @@ export default function RetirementPlanner() {
   // --- On Track Score ---
   const previousScoreRef = useRef<number | null>(null);
 
+  const monthsSinceStart = useMemo(() => {
+    const firstDate = portfolioTimeSeries?.[0]?.snapshot_date ?? null;
+    if (!firstDate) return 0;
+    return differenceInMonths(new Date(), new Date(firstDate));
+  }, [portfolioTimeSeries]);
+
   const scoreData = useMemo(() => {
     if (!portfolioTimeSeries?.length || !baseResult) return null;
 
     const currentAge = new Date().getFullYear() - input.birthYear;
 
-    // Use latest portfolio time series point as actual value
     const latestSnap = portfolioTimeSeries[portfolioTimeSeries.length - 1];
     const actualValue = latestSnap.total_value;
 
-    // Find projected balance at current age
     const projectedRow = baseResult.rows.find((r) => r.age === currentAge);
     const projectedValue = projectedRow?.endBalance ?? null;
 
     if (!projectedValue || projectedValue <= 0) return null;
 
-    // Progress
     const progress = computeProgressScore(actualValue, projectedValue);
     const ratioNow = actualValue / projectedValue;
 
-    // Consistency: derive monthly contributions from net_flow
     const monthlyContribs: number[] = [];
     const monthMap = new Map<string, number>();
     for (const snap of portfolioTimeSeries) {
-      const monthKey = snap.snapshot_date.slice(0, 7); // YYYY-MM
-      const flow = Math.max(snap.net_flow ?? 0, 0); // clamp negative
+      const monthKey = snap.snapshot_date.slice(0, 7);
+      const flow = Math.max(snap.net_flow ?? 0, 0);
       monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + flow);
     }
     const sortedMonths = Array.from(monthMap.keys()).sort();
@@ -175,7 +178,6 @@ export default function RetirementPlanner() {
       monthlyContribs.push(monthMap.get(m)!);
     }
 
-    // Planned monthly from savings ranges for current age
     const currentRange = input.savingsRanges.find(
       (r) => currentAge >= r.startAge && currentAge <= r.endAge
     );
@@ -187,13 +189,11 @@ export default function RetirementPlanner() {
       sortedMonths.length,
     );
 
-    // Momentum: ratio ~6 months ago
     let ratio6mAgo: number | null = null;
     if (portfolioTimeSeries.length > 1) {
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       const targetDate = sixMonthsAgo.toISOString().slice(0, 10);
-      // Find closest snapshot to 6 months ago
       let closest = portfolioTimeSeries[0];
       for (const snap of portfolioTimeSeries) {
         if (snap.snapshot_date <= targetDate) closest = snap;
@@ -215,17 +215,18 @@ export default function RetirementPlanner() {
       consistency,
       momentum,
       previousScore: previousScoreRef.current,
+      monthsSinceStart,
     });
 
     previousScoreRef.current = score;
 
     return {
       score,
-      band: getScoreBand(score),
+      band: getScoreBand(score, monthsSinceStart),
       trend: getScoreTrend(score, previousScoreRef.current),
-      recommendation: getScoreRecommendation(score),
+      recommendation: getScoreRecommendation(score, monthsSinceStart),
     };
-  }, [portfolioTimeSeries, baseResult, input.birthYear, input.savingsRanges]);
+  }, [portfolioTimeSeries, baseResult, input.birthYear, input.savingsRanges, monthsSinceStart]);
 
   const chartProps = {
     baseResult: baseResult!,

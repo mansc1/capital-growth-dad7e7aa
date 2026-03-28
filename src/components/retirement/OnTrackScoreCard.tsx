@@ -16,6 +16,7 @@ const bandColors: Record<ScoreBand, string> = {
   "On Track": "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
   "Needs Attention": "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30",
   "Off Pace": "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30",
+  "Getting Started": "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
 };
 
 const trendConfig: Record<ScoreTrend, { icon: typeof TrendingUp; label: string }> = {
