@@ -1,94 +1,57 @@
-## Add Plan System to Retirement Planner
+## Add "My Plan" (Active Plan Fact Sheet) Page
 
 ### Summary
 
-Create a localStorage-based plan save/restore system with three parts: a storage helper, a plan status + history UI component, and integration into the existing planner page.
+Create a new read-only page at `/my-plan` that displays the user's confirmed active plan as a fact sheet. Reuse existing simulation engine and components, rendering them in read-only mode.
 
-### File 1: `src/lib/retirement-plan-storage.ts` — Storage Helpers
+### File 1: `src/pages/MyPlan.tsx` — New Page
 
-```ts
-type SavedRetirementPlan = {
-  id: string;          // crypto.randomUUID()
-  savedAt: string;     // ISO timestamp
-  input: SimulationInput;
-};
-```
+**Empty state** (no active plan): Card with "No active plan yet" message + "Go to Planner" button linking to `/retirement-planner`.
 
-Exports:
+**Active plan state:**
 
-- `loadActivePlan(): SavedRetirementPlan | null` — parse from `retirement_active_plan`, validate shape, return null on error
-- `saveActivePlan(plan): void` — write to `retirement_active_plan`
-- `loadPlanHistory(): SavedRetirementPlan[]` — parse from `retirement_plan_history`, return `[]` on error
-- `pushPlanToHistory(plan): void` — prepend to history, cap at 5, save
+- Header: "My Retirement Plan" title, "Active Plan" badge (green), "Last updated: {date}" subtitle, "Edit in Planner" link button
+- Run `runSimulation(activePlan.input)` and compute On Track Score using the same logic as RetirementPlanner
+- Render sections in order:
+  1. **OnTrackScoreCard** — reuse existing component, computed from active plan input (not draft)
+  2. **RetirementChart** — reuse existing, no comparison toggle (pass `comparisonMode={false}`, `onToggleComparison` as no-op)
+  3. **SummaryMetrics** — reuse existing
+  4. **Assumptions** — render as static text (Birth Year, Retirement Age, Target Age) in a Card, no inputs
+  5. **Savings Plan** — render ranges as a read-only list (From/To/Monthly as text rows)
+  6. **Return Assumption** — show mode + value(s) as static text
+  7. **Spending Strategy** — show mode + values as static text
+  8. **YearlyDetailsTable** — reuse existing component as-is (already read-only)
 
-All wrapped in try/catch for safety.
+For sections 4-7, create inline read-only renders rather than adding `readOnly` props to existing components (simpler, no risk of breaking Planner).
 
-### File 2: `src/components/retirement/PlanStatusCard.tsx` — UI Component
+### File 2: `src/App.tsx` — Add Route
 
-A single Card component with two sections:
+Add: `<Route path="/my-plan" element={<MyPlan />} />`
 
-**Top section — Status + Action:**
+### File 3: `src/components/AppSidebar.tsx` — Add Menu Item
 
-- If no active plan or draft differs from active: show muted "Draft plan" label + primary "Set as My Plan" button
-- If draft matches active: show "Using your active plan" label (green tint), button disabled or hidden
-- Comparison: `JSON.stringify(input) === JSON.stringify(activePlan.input)`
-
-**Bottom section — Plan History:**
-
-- Compact list of up to 5 saved plans, newest first
-- Each row: formatted date + summary line (`Retire at {retirementAge} • Target {targetAge}`) + "Load" button
-- If no history, show nothing or muted "No saved plans yet"
-
-Props: `{ input, activePlan, history, onConfirm, onLoadPlan }`
-
-### File 3: `src/pages/RetirementPlanner.tsx` — Integration
-
-**New state (loaded from localStorage on mount):**
-
-```ts
-const [activePlan, setActivePlan] = useState<SavedRetirementPlan | null>(loadActivePlan);
-const [planHistory, setPlanHistory] = useState<SavedRetirementPlan[]>(loadPlanHistory);
-```
-
-**Confirm handler:**
-
-```ts
-const handleConfirmPlan = () => {
-  const plan = { id: crypto.randomUUID(), savedAt: new Date().toISOString(), input };
-  saveActivePlan(plan);
-  pushPlanToHistory(plan);
-  setActivePlan(plan);
-  setPlanHistory(loadPlanHistory());
-  toast({ title: "Plan saved", description: "Your active plan has been updated." });
-};
-```
-
-**Load handler:**
-
-```ts
-const handleLoadPlan = (plan: SavedRetirementPlan) => {
-  setInput(plan.input); // restores as draft, simulation updates automatically
-};
-```
-
-**Render placement:**
-
-- Desktop: Add `<PlanStatusCard>` in the left column (col-span-7), between the header and the first input section
-- Mobile: Same position, below header
+Add "My Plan" entry with `FileText` icon from lucide-react, placed before "Retirement Planner" in the nav items array.
 
 ### What stays unchanged
 
-- `retirement-simulation.ts` — no changes
-- `retirement-storage.ts` — continues autosaving draft as before
-- All scoring, chart, and simulation logic
+- RetirementPlanner page — no changes at all
+- All simulation, scoring, storage logic
+- All existing components (no `readOnly` props added)
+- Dashboard, Holdings, Transactions, Settings
 
-All other pages and components  
+### Technical notes
+
+- Active plan loaded via existing `loadActivePlan()` from `retirement-plan-storage.ts`
+- On Track Score computed using same `usePortfolioTimeSeries` + scoring functions as Planner
+- Chart receives `onToggleComparison` as no-op since comparison is disabled on this page
+- Read-only sections are simple Card + text layouts, not reusing editable components
+
 Additional guard rails:
 
-- Keep draft autosave storage and active-plan storage fully separate. Loading a historical plan should only update the current draft input, not overwrite the active plan unless the user explicitly clicks "Set as My Plan".
+- Normalize activePlan.input before running simulation in case older saved plans are missing newer fields.
 
-- Add a lightweight toast on load, e.g. "Plan loaded as draft".
+- Ensure On Track Score on /my-plan uses active plan data only, never draft state.
 
-- If convenient, replace raw JSON.stringify comparison with a small helper like isSamePlanInput(a, b) for readability and future safety.
+- Add a small helper text near the header: "This page shows your confirmed plan. To make changes, edit your draft in Retirement Planner."
 
-- If crypto.randomUUID is not guaranteed in all target environments, add a simple fallback ID generator.
+- Verify YearlyDetailsTable receives all required props when rendered outside RetirementPlanner.
