@@ -1,89 +1,143 @@
-## Implement On Track Score + Recommendation System
+## Add Getting Started Mode to On Track Score
 
 ### Summary
 
-Create a scoring engine (`src/lib/on-track-score.ts`) and a display card (`src/components/retirement/OnTrackScoreCard.tsx`), then integrate into the Retirement Planner page above the projection chart.
+Soften scoring for new users (< 3 months) by adding `monthsSinceStart` parameter, adjusting weights/floors, introducing a "Getting Started" band, and updating the UI card.
 
-### File 1: `src/lib/on-track-score.ts` — Scoring Engine
+### File 1: `src/lib/on-track-score.ts`
 
-**Exports:**
+**Update `OnTrackScoreInput` interface** — add `monthsSinceStart?: number`
 
-- `computeProgressScore(actual, projected)` — non-linear interpolation mapping ratio → 0-100
-- `computeConsistencyScore(contributions, plannedMonthly, monthsSinceStart)` — average monthly completion rate over min(12, monthsSinceStart)
-- `computeMomentumScore(ratioNow, ratio6mAgo)` — bounded 50-85 soft modifier
-- `computeOnTrackScore({ progress, consistency, momentum, previousScore? })` — weighted 55/25/20, smoothed with asymmetric alpha (0.18 up, 0.28 down)
-- `getScoreBand(score)` — returns `"Excellent" | "Strong" | "On Track" | "Needs Attention" | "Off Pace"`
-- `getScoreTrend(score, previousScore)` — returns `"improving" | "stable" | "declining"`
-- `getScoreRecommendation(score)` — returns 1-2 line supportive guidance string
+**Update `computeOnTrackScore**` — apply soften logic when `monthsSinceStart < 3`:
 
-**Progress interpolation table:**
+- Floor progress at 50, consistency at 60
+- Shift weights to 40/40/20 (favor consistency over progress)
+- Normal users (>= 3 months) unchanged
 
-```
-[0, 0], [0.5, 30], [0.7, 50], [0.85, 68], [1.0, 80], [1.1, 88], [1.25, 96], [1.35, 100]
-```
+**Update `ScoreBand` type** — add `"Getting Started"` to the union
 
-**Smoothing:**
+**Update `getScoreBand**` — add `monthsSinceStart` parameter; if < 3, return `"Getting Started"`
 
-```ts
-const alpha = raw > prev ? 0.18 : 0.28;
-return prev + alpha * (raw - prev);
-```
+**Update `getScoreRecommendation**` — add `monthsSinceStart` parameter; if < 3, return `"You're getting started. Stay consistent to build your momentum."`
 
-### File 2: `src/components/retirement/OnTrackScoreCard.tsx` — Display Card
+### File 2: `src/components/retirement/OnTrackScoreCard.tsx`
 
-A compact Card showing:
+**Add "Getting Started" to `bandColors**` — neutral blue/slate color (e.g. `bg-blue-500/15 text-blue-700 border-blue-500/30`)
 
-- Large score number (text-4xl font-bold)
-- Band label as a colored badge (green for Excellent/Strong, yellow for On Track, orange for Needs Attention, red for Off Pace)
-- Trend arrow (↑ Improving / → Stable / ↓ Declining) in muted text
-- Recommendation text (text-sm text-muted-foreground)
+### File 3: `src/pages/RetirementPlanner.tsx`
 
-Props: `{ score, band, trend, recommendation }`
-
-If no actual portfolio data exists (score cannot be computed), show a muted "Connect portfolio data to see your On Track Score" message instead.
-
-### File 3: `src/pages/RetirementPlanner.tsx` — Integration
-
-**Compute score data** using existing `actualByAge`, `baseResult`, `portfolioTimeSeries`, and `input`:
+**Compute `monthsSinceStart**` from `portfolioTimeSeries[0].snapshot_date`:
 
 ```ts
-const currentAge = new Date().getFullYear() - input.birthYear;
-const actualValue = actualByAge?.get(currentAge) ?? null;
-const projectedRow = baseResult?.rows.find(r => r.age === currentAge);
-const projectedValue = projectedRow?.endBalance ?? null;
-
-// For consistency: derive monthly contributions from portfolioTimeSeries net_flow
-// For momentum: compute ratio 6 months ago from portfolioTimeSeries
-
-const scoreData = useMemo(() => {
-  if (!actualValue || !projectedValue || projectedValue <= 0) return null;
-  // compute all sub-scores and final score
-}, [actualValue, projectedValue, portfolioTimeSeries, input]);
+const firstDate = portfolioTimeSeries[0].snapshot_date;
+const monthsSinceStart = Math.floor(
+  (Date.now() - new Date(firstDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+);
 ```
 
-**Render** the `OnTrackScoreCard` above the `RetirementChart` in both desktop (sticky sidebar) and mobile (MiniProjectionPanel area) layouts.
+**Pass to scoring functions:**
 
-**Previous score** — store in `useRef` to enable smoothing across re-renders within the same session. No localStorage persistence needed for the score itself.
+```ts
+const score = computeOnTrackScore({ progress, consistency, momentum, previousScore, monthsSinceStart });
+const band = getScoreBand(score, monthsSinceStart);
+const recommendation = getScoreRecommendation(score, monthsSinceStart);
+```
 
 ### What stays unchanged
 
-- `retirement-simulation.ts` — no changes
-- All simulation formulas, presets, storage
-- Portfolio analytics, dashboard, holdings
-- Navigation, routing, sidebar
-- All existing retirement components
+- All scoring formulas for users with >= 3 months
+- Simulation logic, retirement inputs, other components
+- Dashboard, Holdings, Transactions  
 
-### Technical notes
 
-- Consistency score uses `portfolioTimeSeries` `net_flow` field to approximate monthly contributions
-- Momentum uses `actualByAge` values at current age vs ~6 months prior from time series
-- Score only renders when both actual portfolio data AND valid simulation exist
-- No backend persistence — score is computed on-the-fly from existing data
+Additional Improvements for Getting Started Mode (Robustness Fixes)
 
-Additional guard rails:
+These are small but important guard-rail improvements to ensure stability and correctness.
 
-1. Use the latest portfolio time series point as the current actual portfolio value for the score. Do not use actualByAge.get(currentAge) as the main current-value source, because that is an age-bucketed annual aggregate, not necessarily the latest actual value.
+------------------------------------------------
 
-2. For consistency scoring, do not treat negative net_flow as missed contribution penalty. Use only positive contribution-like monthly flows (or derive monthly contributions from transactions if more reliable). At minimum, clamp monthly contribution input with Math.max(net_flow, 0).
+1) Safe handling when portfolioTimeSeries is empty
 
-3. Using useRef for previousScore is acceptable for v1, but smoothing should be understood as session-local only. After refresh, the score can initialize from raw score again.
+In RetirementPlanner.tsx:
+
+Current logic assumes portfolioTimeSeries[0] exists.
+
+Update to safely handle empty or undefined arrays:
+
+const firstDate = portfolioTimeSeries?.[0]?.snapshot_date ?? null;
+
+const monthsSinceStart = firstDate
+
+  ? Math.floor(
+
+      ([Date.now](http://Date.now)() - new Date(firstDate).getTime()) /
+
+      (1000  *60*  60  *24*  30.44)
+
+    )
+
+  : 0;
+
+This prevents runtime errors when no portfolio data exists.
+
+------------------------------------------------
+
+2) Use date-fns differenceInMonths (preferred)
+
+If date-fns is already available in the project, replace manual calculation with:
+
+import { differenceInMonths } from "date-fns";
+
+const monthsSinceStart = firstDate
+
+  ? differenceInMonths(new Date(), new Date(firstDate))
+
+  : 0;
+
+This improves readability and avoids approximation issues.
+
+If date-fns is not available, keep the existing calculation.
+
+------------------------------------------------
+
+3) Ensure "Getting Started" is fully supported in types and UI
+
+Update ScoreBand type everywhere:
+
+type ScoreBand =
+
+  | "Excellent"
+
+  | "Strong"
+
+  | "On Track"
+
+  | "Needs Attention"
+
+  | "Off Pace"
+
+  | "Getting Started";
+
+Ensure all components that consume ScoreBand (especially OnTrackScoreCard) support:
+
+- "Getting Started" in bandColors
+
+- correct styling (neutral tone, not red/orange)
+
+- no fallback to default styling
+
+Also verify:
+
+- no switch/case or mapping misses "Getting Started"
+
+- no TypeScript exhaustiveness errors
+
+------------------------------------------------
+
+Expected Result
+
+- No crash when portfolioTimeSeries is empty
+
+- More reliable month calculation
+
+- "Getting Started" behaves consistently across logic and UI
