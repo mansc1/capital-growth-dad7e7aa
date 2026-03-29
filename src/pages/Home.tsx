@@ -4,8 +4,8 @@ import { differenceInMonths } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { MiniScoreHistory } from "@/components/retirement/MiniScoreHistory";
+import { ScoreRing } from "@/components/home/ScoreRing";
 import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { loadActivePlan } from "@/lib/retirement-plan-storage";
 import { runSimulation, type SimulationInput } from "@/lib/retirement-simulation";
@@ -50,14 +50,6 @@ function normalizeInput(raw: SimulationInput): SimulationInput {
   return { ...DEFAULT_INPUT, ...raw };
 }
 
-const bandColors: Record<ScoreBand, string> = {
-  Excellent: "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30",
-  Strong: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
-  "On Track": "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
-  "Needs Attention": "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30",
-  "Off Pace": "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30",
-  "Getting Started": "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
-};
 
 function getTargetContext(score: number, band: ScoreBand): string {
   if (band === "Getting Started") return "Building your score history";
@@ -245,16 +237,11 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
       <Card>
         <CardContent className="p-6">
           {scoreData ? (
-            <div className="space-y-3">
+            <div className="flex flex-col items-center space-y-4">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
                 On Track Score
               </p>
-              <div className="flex items-baseline gap-3">
-                <span className="text-7xl font-bold text-foreground">{scoreData.score}</span>
-                <Badge variant="outline" className={bandColors[scoreData.band]}>
-                  {scoreData.band}
-                </Badge>
-              </div>
+              <ScoreRing score={scoreData.score} band={scoreData.band} />
               <div className="flex items-center gap-1.5 text-base font-semibold">
                 {weeklyDelta !== null ? (
                   <>
@@ -279,8 +266,8 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
               {scoreHistory && scoreHistory.length >= 1 && (
                 <MiniScoreHistory history={scoreHistory} />
               )}
-              <p className="text-sm text-muted-foreground">{scoreData.recommendation}</p>
-              <p className="text-xs text-muted-foreground/50">{getTargetContext(scoreData.score, scoreData.band)}</p>
+              <p className="text-sm text-muted-foreground text-center">{scoreData.recommendation}</p>
+              <p className="text-xs text-muted-foreground/50 text-center">{getTargetContext(scoreData.score, scoreData.band)}</p>
             </div>
           ) : (
             <div className="space-y-2">
