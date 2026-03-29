@@ -217,6 +217,7 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
       score,
       band: getScoreBand(score, monthsSinceStart),
       recommendation: getScoreRecommendation(score, monthsSinceStart),
+      projectedValue,
     };
   }, [portfolioTimeSeries, result, input.birthYear, input.savingsRanges, monthsSinceStart]);
 
