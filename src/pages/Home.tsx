@@ -68,20 +68,44 @@ function getTargetContext(score: number, band: ScoreBand): string {
   return `${45 - score} points to Needs Attention`;
 }
 
-function getActionSuggestions(band: ScoreBand): string[] {
+function getActionSuggestions(
+  band: ScoreBand,
+  input: SimulationInput,
+  portfolioValue: number | null,
+  projectedValue: number | null,
+): string[] {
+  const currentAge = new Date().getFullYear() - input.birthYear;
+  const currentRange = input.savingsRanges.find(
+    (r) => currentAge >= r.startAge && currentAge <= r.endAge
+  );
+  const plannedMonthly = currentRange?.monthlySavings ?? 0;
+
   switch (band) {
     case "Off Pace":
-      return ["Consider increasing monthly savings", "Review your retirement age target"];
-    case "Needs Attention":
-      return ["Consider increasing monthly savings", "Review your retirement age target"];
+    case "Needs Attention": {
+      const suggestions: string[] = [];
+      if (projectedValue && portfolioValue && projectedValue > 0) {
+        const gap = projectedValue - portfolioValue;
+        if (gap > 0) {
+          const monthlyGap = Math.round(gap / 12 / 1000) * 1000;
+          if (monthlyGap > 0) suggestions.push(`Increase monthly savings by ~฿${monthlyGap.toLocaleString()}`);
+        }
+      }
+      suggestions.push("Consider delaying retirement by 1–2 years");
+      return suggestions.slice(0, 2);
+    }
     case "On Track":
-      return ["Stay consistent with your current savings plan"];
+      return [`You're saving ฿${plannedMonthly.toLocaleString()}/month — stay consistent`];
     case "Strong":
+    case "Excellent": {
+      if (projectedValue && portfolioValue && portfolioValue > projectedValue) {
+        const ahead = Math.round((portfolioValue - projectedValue) / 1000);
+        return [`You're ฿${ahead.toLocaleString()}k ahead of plan. Consider reviewing risk allocation.`];
+      }
       return ["You're ahead of plan. Consider reviewing your risk allocation."];
-    case "Excellent":
-      return ["You're ahead of plan. Consider reviewing your risk allocation."];
+    }
     case "Getting Started":
-      return ["Keep contributing regularly to build momentum."];
+      return [`Start with ฿${plannedMonthly.toLocaleString()}/month to build momentum`];
   }
 }
 
