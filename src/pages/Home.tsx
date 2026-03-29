@@ -1,11 +1,10 @@
-import { useMemo, useRef, useEffect, useState } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { differenceInMonths } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RetirementChart } from "@/components/retirement/RetirementChart";
 import { MiniScoreHistory } from "@/components/retirement/MiniScoreHistory";
 import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { loadActivePlan } from "@/lib/retirement-plan-storage";
@@ -29,6 +28,7 @@ import {
   Pencil,
   Briefcase,
   Target,
+  Lightbulb,
 } from "lucide-react";
 
 const DEFAULT_INPUT: SimulationInput = {
@@ -68,6 +68,23 @@ function getTargetContext(score: number, band: ScoreBand): string {
   return `${45 - score} points to Needs Attention`;
 }
 
+function getActionSuggestions(band: ScoreBand): string[] {
+  switch (band) {
+    case "Off Pace":
+      return ["Consider increasing monthly savings", "Review your retirement age target"];
+    case "Needs Attention":
+      return ["Consider increasing monthly savings", "Review your retirement age target"];
+    case "On Track":
+      return ["Stay consistent with your current savings plan"];
+    case "Strong":
+      return ["You're ahead of plan. Consider reviewing your risk allocation."];
+    case "Excellent":
+      return ["You're ahead of plan. Consider reviewing your risk allocation."];
+    case "Getting Started":
+      return ["Keep contributing regularly to build momentum."];
+  }
+}
+
 export default function Home() {
   const activePlan = useMemo(() => loadActivePlan(), []);
 
@@ -104,20 +121,6 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
   const { data: portfolioTimeSeries } = usePortfolioTimeSeries("SINCE_START");
 
   const result = useMemo(() => runSimulation(input), [input]);
-  const [comparisonMode, setComparisonMode] = useState(false);
-
-  const actualByAge = useMemo(() => {
-    if (!portfolioTimeSeries?.length) return undefined;
-    const currentAge = new Date().getFullYear() - input.birthYear;
-    const byYear = new Map<number, number>();
-    for (const snap of portfolioTimeSeries) {
-      const year = parseInt(snap.snapshot_date.slice(0, 4));
-      const age = year - input.birthYear;
-      if (age > currentAge || age < 0) continue;
-      byYear.set(age, snap.total_value);
-    }
-    return byYear.size > 0 ? byYear : undefined;
-  }, [portfolioTimeSeries, input.birthYear]);
 
   const monthsSinceStart = useMemo(() => {
     const firstDate = portfolioTimeSeries?.[0]?.snapshot_date ?? null;
@@ -130,7 +133,6 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
     const currentAge = new Date().getFullYear() - input.birthYear;
     const latestSnap = portfolioTimeSeries[portfolioTimeSeries.length - 1];
     const actualValue = latestSnap.total_value;
-    // Find exact age row, or fallback to closest within threshold
     const closestRow = result.rows.find((r) => r.age === currentAge)
       ?? result.rows.reduce((closest, r) =>
         Math.abs(r.age - currentAge) < Math.abs(closest.age - currentAge) ? r : closest
@@ -194,7 +196,6 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
     };
   }, [portfolioTimeSeries, result, input.birthYear, input.savingsRanges, monthsSinceStart]);
 
-  // Record score (same rule as My Plan — active plan only)
   useEffect(() => {
     if (scoreData?.score != null) {
       addScorePoint(Math.round(scoreData.score));
@@ -204,13 +205,11 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
   const scoreHistory = useMemo(() => loadScoreHistory(), [scoreData?.score]);
   const weeklyDelta = scoreHistory ? getWeeklyDelta(scoreHistory) : null;
 
-  // Plan summary values
+  // Plan summary
   const retirementRow = result.rows.find((r) => r.age === input.retirementAge);
   const balanceAtRetirement = retirementRow?.endBalance ?? 0;
-  const runsOutRow = result.rows.find((r) => r.endBalance <= 0 && r.age > input.retirementAge);
-  const runsOutAge = runsOutRow?.age ?? null;
 
-  // Portfolio mini card
+  // Portfolio
   const latestSnap = portfolioTimeSeries?.[portfolioTimeSeries.length - 1];
   const portfolioValue = latestSnap?.total_value ?? null;
   const portfolioReturn = latestSnap?.total_return_percent ?? null;
@@ -273,8 +272,31 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
         </CardContent>
       </Card>
 
-      {/* Plan Summary */}
+      {/* Snapshot Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-4 space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Portfolio Value</p>
+            {portfolioValue !== null ? (
+              <>
+                <p className="text-xl font-bold text-foreground">
+                  {formatCurrency(portfolioValue)}
+                </p>
+                {portfolioReturn !== null && (
+                  <p className={`text-xs font-medium ${
+                    portfolioReturn >= 0
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-red-600 dark:text-red-400"
+                  }`}>
+                    {portfolioReturn >= 0 ? "+" : ""}{portfolioReturn.toFixed(2)}%
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No portfolio data yet</p>
+            )}
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="p-4 space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Balance at Retirement</p>
@@ -284,33 +306,24 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
             <p className="text-xs text-muted-foreground">At age {input.retirementAge}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4 space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Money Runs Out</p>
-            <p className="text-xl font-bold text-foreground">
-              {runsOutAge ? `Age ${runsOutAge}` : "Never (within plan)"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {runsOutAge
-                ? `${runsOutAge - input.retirementAge} years after retirement`
-                : `Lasts past age ${input.targetAge}`}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Retirement Balance Projection */}
-      <RetirementChart
-        baseResult={result}
-        retirementAge={input.retirementAge}
-        targetAge={input.targetAge}
-        comparisonMode={comparisonMode}
-        onToggleComparison={setComparisonMode}
-        annualReturn={input.annualReturn}
-        returnMode={input.returnMode ?? "fixed"}
-        actualByAge={actualByAge}
-        hideComparisonToggle
-      />
+      {/* What to do next */}
+      {scoreData && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <Lightbulb className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">What to do next</p>
+                {getActionSuggestions(scoreData.band).map((s, i) => (
+                  <p key={i} className="text-sm text-foreground">{s}</p>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
@@ -333,34 +346,6 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
           </Link>
         </Button>
       </div>
-
-      {/* Portfolio Mini Card */}
-      <Card>
-        <CardContent className="p-4">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Portfolio</p>
-          {portfolioValue !== null ? (
-            <div className="flex items-baseline gap-4">
-              <span className="text-lg font-bold text-foreground">
-                {formatCurrency(portfolioValue)}
-              </span>
-              {portfolioReturn !== null && (
-                <span
-                  className={`text-sm font-medium ${
-                    portfolioReturn >= 0
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}
-                >
-                  {portfolioReturn >= 0 ? "+" : ""}
-                  {portfolioReturn.toFixed(2)}%
-                </span>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No portfolio data yet</p>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
