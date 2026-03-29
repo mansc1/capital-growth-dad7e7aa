@@ -245,16 +245,11 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
       <Card>
         <CardContent className="p-6">
           {scoreData ? (
-            <div className="space-y-3">
+            <div className="flex flex-col items-center space-y-4">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
                 On Track Score
               </p>
-              <div className="flex items-baseline gap-3">
-                <span className="text-7xl font-bold text-foreground">{scoreData.score}</span>
-                <Badge variant="outline" className={bandColors[scoreData.band]}>
-                  {scoreData.band}
-                </Badge>
-              </div>
+              <ScoreRing score={scoreData.score} band={scoreData.band} />
               <div className="flex items-center gap-1.5 text-base font-semibold">
                 {weeklyDelta !== null ? (
                   <>
@@ -279,8 +274,8 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
               {scoreHistory && scoreHistory.length >= 1 && (
                 <MiniScoreHistory history={scoreHistory} />
               )}
-              <p className="text-sm text-muted-foreground">{scoreData.recommendation}</p>
-              <p className="text-xs text-muted-foreground/50">{getTargetContext(scoreData.score, scoreData.band)}</p>
+              <p className="text-sm text-muted-foreground text-center">{scoreData.recommendation}</p>
+              <p className="text-xs text-muted-foreground/50 text-center">{getTargetContext(scoreData.score, scoreData.band)}</p>
             </div>
           ) : (
             <div className="space-y-2">
