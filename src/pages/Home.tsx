@@ -126,15 +126,17 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
   }, [portfolioTimeSeries]);
 
   const scoreData = useMemo(() => {
-    if (!portfolioTimeSeries?.length || !result) return null;
+    if (!portfolioTimeSeries?.length || !result?.rows?.length) return null;
     const currentAge = new Date().getFullYear() - input.birthYear;
     const latestSnap = portfolioTimeSeries[portfolioTimeSeries.length - 1];
     const actualValue = latestSnap.total_value;
-    // Find exact age row, or fallback to closest
-    const projectedRow = result.rows.find((r) => r.age === currentAge)
+    // Find exact age row, or fallback to closest within threshold
+    const closestRow = result.rows.find((r) => r.age === currentAge)
       ?? result.rows.reduce((closest, r) =>
         Math.abs(r.age - currentAge) < Math.abs(closest.age - currentAge) ? r : closest
       );
+    const MAX_AGE_DIFF = 2;
+    const projectedRow = Math.abs(closestRow.age - currentAge) > MAX_AGE_DIFF ? null : closestRow;
     const projectedValue = projectedRow?.endBalance ?? null;
     if (!projectedValue || projectedValue <= 0) return null;
 

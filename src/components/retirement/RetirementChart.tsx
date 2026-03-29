@@ -46,7 +46,7 @@ const formatCurrency = (v: number) => {
 
 const BASE_COLOR = "hsl(262, 83%, 58%)";
 const COLORS = ["hsl(221, 83%, 53%)", "hsl(142, 71%, 45%)", "hsl(38, 92%, 50%)"];
-const ACTUAL_BAR_COLOR = "hsla(221, 83%, 53%, 0.25)";
+const ACTUAL_BAR_COLOR = "hsla(221, 83%, 53%, 0.4)";
 
 function CustomTooltip({ active, payload, label, comparisonMode, retirementAge }: any) {
   if (!active || !payload?.length) return null;
