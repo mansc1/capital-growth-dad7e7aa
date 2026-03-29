@@ -245,48 +245,46 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
       <Card>
         <CardContent className="p-6">
           {scoreData ? (
-            <div className="space-y-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+            <div className="space-y-3">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
                 On Track Score
               </p>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-baseline gap-3">
-                  <span className="text-5xl font-bold text-foreground">{scoreData.score}</span>
-                  <Badge variant="outline" className={bandColors[scoreData.band]}>
-                    {scoreData.band}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-1 text-sm text-muted-foreground pt-2">
-                  {weeklyDelta !== null ? (
-                    <>
-                      {weeklyDelta > 0 ? (
-                        <TrendingUp className="h-4 w-4 text-primary" />
-                      ) : weeklyDelta < 0 ? (
-                        <TrendingDown className="h-4 w-4 text-destructive" />
-                      ) : (
-                        <Minus className="h-4 w-4" />
-                      )}
-                      <span className={weeklyDelta > 0 ? "text-primary" : weeklyDelta < 0 ? "text-destructive" : ""}>
-                        {weeklyDelta > 0 ? "+" : ""}{weeklyDelta} this week
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Minus className="h-4 w-4" />
-                      <span>No change this week</span>
-                    </>
-                  )}
-                </div>
+              <div className="flex items-baseline gap-3">
+                <span className="text-7xl font-bold text-foreground">{scoreData.score}</span>
+                <Badge variant="outline" className={bandColors[scoreData.band]}>
+                  {scoreData.band}
+                </Badge>
               </div>
-              <p className="text-sm text-muted-foreground">{scoreData.recommendation}</p>
-              <p className="text-xs text-muted-foreground/50">{getTargetContext(scoreData.score, scoreData.band)}</p>
+              <div className="flex items-center gap-1.5 text-base font-semibold">
+                {weeklyDelta !== null ? (
+                  <>
+                    {weeklyDelta > 0 ? (
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                    ) : weeklyDelta < 0 ? (
+                      <TrendingDown className="h-4 w-4 text-red-500" />
+                    ) : (
+                      <Minus className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span className={weeklyDelta > 0 ? "text-green-500" : weeklyDelta < 0 ? "text-red-500" : "text-muted-foreground"}>
+                      {weeklyDelta > 0 ? "+" : ""}{weeklyDelta} this week
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Minus className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">No change this week</span>
+                  </>
+                )}
+              </div>
               {scoreHistory && scoreHistory.length >= 1 && (
                 <MiniScoreHistory history={scoreHistory} />
               )}
+              <p className="text-sm text-muted-foreground">{scoreData.recommendation}</p>
+              <p className="text-xs text-muted-foreground/50">{getTargetContext(scoreData.score, scoreData.band)}</p>
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
                 On Track Score
               </p>
               <p className="text-sm text-muted-foreground">
@@ -297,40 +295,36 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
         </CardContent>
       </Card>
 
-      {/* Snapshot Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-4 space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Portfolio Value</p>
-            {portfolioValue !== null ? (
-              <>
-                <p className="text-xl font-bold text-foreground">
-                  {formatCurrency(portfolioValue)}
+      {/* Compact Snapshot Strip */}
+      <div className="flex gap-8 border-t border-border pt-4 px-1">
+        <div className="space-y-0.5">
+          <p className="text-[11px] font-medium text-muted-foreground">Portfolio Value</p>
+          {portfolioValue !== null ? (
+            <>
+              <p className="text-base font-semibold text-foreground">
+                {formatCurrency(portfolioValue)}
+              </p>
+              {portfolioReturn !== null && (
+                <p className={`text-[11px] font-medium ${
+                  portfolioReturn >= 0
+                    ? "text-green-600 dark:text-green-400"
+                    : "text-red-600 dark:text-red-400"
+                }`}>
+                  {portfolioReturn >= 0 ? "+" : ""}{portfolioReturn.toFixed(2)}%
                 </p>
-                {portfolioReturn !== null && (
-                  <p className={`text-xs font-medium ${
-                    portfolioReturn >= 0
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}>
-                    {portfolioReturn >= 0 ? "+" : ""}{portfolioReturn.toFixed(2)}%
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">No portfolio data yet</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Balance at Retirement</p>
-            <p className="text-xl font-bold text-foreground">
-              {formatCurrency(balanceAtRetirement)}
-            </p>
-            <p className="text-xs text-muted-foreground">At age {input.retirementAge}</p>
-          </CardContent>
-        </Card>
+              )}
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">No data yet</p>
+          )}
+        </div>
+        <div className="space-y-0.5">
+          <p className="text-[11px] font-medium text-muted-foreground">Balance at Retirement</p>
+          <p className="text-base font-semibold text-foreground">
+            {formatCurrency(balanceAtRetirement)}
+          </p>
+          <p className="text-[11px] text-muted-foreground">At age {input.retirementAge}</p>
+        </div>
       </div>
 
       {/* What to do next */}
@@ -341,7 +335,7 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
               <Lightbulb className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
               <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">What to do next</p>
-                {getActionSuggestions(scoreData.band).map((s, i) => (
+                {getActionSuggestions(scoreData.band, input, portfolioValue, scoreData.projectedValue).map((s, i) => (
                   <p key={i} className="text-sm text-foreground">{s}</p>
                 ))}
               </div>
@@ -351,20 +345,20 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
       )}
 
       {/* Quick Actions */}
-      <div className="flex flex-wrap gap-3">
-        <Button variant="outline" asChild>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" size="sm" asChild>
           <Link to="/my-plan">
             <FileText className="h-4 w-4 mr-1.5" />
             View My Retirement Plan
           </Link>
         </Button>
-        <Button variant="outline" asChild>
+        <Button variant="ghost" size="sm" asChild>
           <Link to="/retirement-planner">
             <Pencil className="h-4 w-4 mr-1.5" />
             Edit Plan
           </Link>
         </Button>
-        <Button variant="outline" asChild>
+        <Button variant="ghost" size="sm" asChild>
           <Link to="/dashboard">
             <Briefcase className="h-4 w-4 mr-1.5" />
             View Portfolio
