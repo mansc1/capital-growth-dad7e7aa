@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MiniScoreHistory } from "@/components/retirement/MiniScoreHistory";
 import { ScoreRing } from "@/components/home/ScoreRing";
+import { ScoreDrivers } from "@/components/home/ScoreDrivers";
+import { computeScoreDrivers, type ScoreDriver } from "@/lib/on-track-drivers";
 import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { loadActivePlan } from "@/lib/retirement-plan-storage";
 import { runSimulation, type SimulationInput } from "@/lib/retirement-simulation";
@@ -205,11 +207,21 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
     });
     previousScoreRef.current = score;
 
+    const drivers = computeScoreDrivers({
+      monthlyContribs,
+      plannedMonthly,
+      actualValue,
+      projectedValue,
+      ratioNow,
+      ratio6mAgo,
+    });
+
     return {
       score,
       band: getScoreBand(score, monthsSinceStart),
       recommendation: getScoreRecommendation(score, monthsSinceStart),
       projectedValue,
+      drivers,
     };
   }, [portfolioTimeSeries, result, input.birthYear, input.savingsRanges, monthsSinceStart]);
 
@@ -266,6 +278,7 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
               {scoreHistory && scoreHistory.length >= 1 && (
                 <MiniScoreHistory history={scoreHistory} />
               )}
+              {scoreData.drivers && <ScoreDrivers drivers={scoreData.drivers} />}
               <p className="text-sm text-muted-foreground text-center">{scoreData.recommendation}</p>
               <p className="text-xs text-muted-foreground/50 text-center">{getTargetContext(scoreData.score, scoreData.band)}</p>
             </div>
