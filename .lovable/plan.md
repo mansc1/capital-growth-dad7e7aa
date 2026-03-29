@@ -1,40 +1,47 @@
 
 
-## Refine Home Portfolio Consistency Fix (Edge Cases + Safe Fallback)
+## Refactor Home Page to Final Score-First Design
 
 ### Summary
 
-Add safety guards to the score computation in `Home.tsx` and increase actual bar visibility in `RetirementChart.tsx`.
+The current Home page is close to the target but needs: removal of the RetirementChart, replacement of "Balance at Retirement / Money Runs Out" cards with "Portfolio Value / Balance at Retirement" snapshot cards, addition of a "What to do next" action card, and reordering of sections.
 
-### Changes
+### Changes — `src/pages/Home.tsx`
 
-**1. `src/pages/Home.tsx`** — Harden score computation
+**1. Remove RetirementChart** (lines 302-313)
+- Delete the `RetirementChart` import and its render block
+- Remove `comparisonMode` state, `actualByAge` memo, and the `RetirementChart` import
+- This eliminates the heavy projection chart from Home
 
-- **Guard simulation data** (line 129): Add `!result?.rows?.length` to the early return check
-- **MAX_AGE_DIFF threshold** (lines 134-137): After finding the closest `projectedRow`, check `Math.abs(projectedRow.age - currentAge) > 2` — if so, treat as null and skip score computation
-- **Consistent age calc**: Use `Math.floor` for currentAge: `Math.floor((Date.now() - new Date(input.birthYear, 0, 1).getTime()) / (365.25 * 86400000))` — but this is overkill; the current `new Date().getFullYear() - input.birthYear` is used everywhere consistently, so keep it but ensure `actualByAge` uses the same method (it already does at line 115)
-- **Score fallback order** (line 132): Already uses `latestSnap.total_value` directly. No change needed — the actual value source is already the latest snap.
+**2. Replace plan summary cards** (lines 277-300)
+- Change from "Balance at Retirement + Money Runs Out" to "Portfolio Value + Balance at Retirement"
+- Card 1: Portfolio Value — move current portfolio mini card content here (latest `total_value`, return %)
+- Card 2: Balance at Retirement — keep existing projected balance at retirement age
+- Remove the standalone Portfolio Mini Card at the bottom (lines 337-363)
+- Remove `runsOutAge`/`runsOutRow` computation (no longer displayed)
 
-Concrete code change in `scoreData` useMemo:
-```
-if (!portfolioTimeSeries?.length || !result?.rows?.length) return null;
-...
-let projectedRow = result.rows.find((r) => r.age === currentAge)
-  ?? result.rows.reduce((closest, r) =>
-    Math.abs(r.age - currentAge) < Math.abs(closest.age - currentAge) ? r : closest
-  );
-const MAX_AGE_DIFF = 2;
-if (Math.abs(projectedRow.age - currentAge) > MAX_AGE_DIFF) return null;
-```
+**3. Add "What to do next" action card** (new, between snapshot cards and quick actions)
+- Single card with 1-2 suggestions derived from score band:
+  - Off Pace / Needs Attention: "Consider increasing monthly savings" + "Review your retirement age target"
+  - On Track: "Stay consistent with your current savings plan"
+  - Strong / Excellent: "You're ahead of plan. Consider reviewing your risk allocation."
+  - Getting Started: "Keep contributing regularly to build momentum."
+- Simple helper function `getActionSuggestions(band): string[]`
 
-- **Remove unused `comparisonMode` state** (line 107): It's passed to `RetirementChart` but `hideComparisonToggle` is true, so comparison is never used. Keep the state for the prop requirement but this is harmless.
+**4. Reorder sections** (top to bottom):
+1. Score Hero (unchanged)
+2. Snapshot cards (Portfolio Value + Balance at Retirement)
+3. What to do next
+4. Quick Actions (unchanged)
 
-**2. `src/components/retirement/RetirementChart.tsx`** — Increase actual bar visibility
-
-- Line 49: Change `ACTUAL_BAR_COLOR` from `hsla(221, 83%, 53%, 0.25)` to `hsla(221, 83%, 53%, 0.4)`
+**5. Cleanup unused imports**
+- Remove `RetirementChart`, `useState` (no more comparisonMode), unused icons if any
 
 ### What stays unchanged
-- Score computation formulas, simulation engine
-- All other pages, hooks, storage helpers
-- Home page layout and role
+- Score computation logic, all fallbacks, MAX_AGE_DIFF guard
+- Score history recording
+- Empty state (HomeEmpty)
+- Quick action buttons (already correct order)
+- All other pages (My Plan, Retirement Planner, Dashboard)
+- Sidebar navigation
 
