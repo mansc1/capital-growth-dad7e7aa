@@ -1,10 +1,11 @@
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { differenceInMonths } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { RetirementChart } from "@/components/retirement/RetirementChart";
 import { MiniScoreHistory } from "@/components/retirement/MiniScoreHistory";
 import { usePortfolioTimeSeries } from "@/hooks/use-portfolio-time-series";
 import { loadActivePlan } from "@/lib/retirement-plan-storage";
@@ -103,6 +104,20 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
   const { data: portfolioTimeSeries } = usePortfolioTimeSeries("SINCE_START");
 
   const result = useMemo(() => runSimulation(input), [input]);
+  const [comparisonMode, setComparisonMode] = useState(false);
+
+  const actualByAge = useMemo(() => {
+    if (!portfolioTimeSeries?.length) return undefined;
+    const currentAge = new Date().getFullYear() - input.birthYear;
+    const byYear = new Map<number, number>();
+    for (const snap of portfolioTimeSeries) {
+      const year = parseInt(snap.snapshot_date.slice(0, 4));
+      const age = year - input.birthYear;
+      if (age > currentAge || age < 0) continue;
+      byYear.set(age, snap.total_value);
+    }
+    return byYear.size > 0 ? byYear : undefined;
+  }, [portfolioTimeSeries, input.birthYear]);
 
   const monthsSinceStart = useMemo(() => {
     const firstDate = portfolioTimeSeries?.[0]?.snapshot_date ?? null;
@@ -115,7 +130,11 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
     const currentAge = new Date().getFullYear() - input.birthYear;
     const latestSnap = portfolioTimeSeries[portfolioTimeSeries.length - 1];
     const actualValue = latestSnap.total_value;
-    const projectedRow = result.rows.find((r) => r.age === currentAge);
+    // Find exact age row, or fallback to closest
+    const projectedRow = result.rows.find((r) => r.age === currentAge)
+      ?? result.rows.reduce((closest, r) =>
+        Math.abs(r.age - currentAge) < Math.abs(closest.age - currentAge) ? r : closest
+      );
     const projectedValue = projectedRow?.endBalance ?? null;
     if (!projectedValue || projectedValue <= 0) return null;
 
@@ -278,12 +297,25 @@ function HomeWithPlan({ input }: { input: SimulationInput }) {
         </Card>
       </div>
 
+      {/* Retirement Balance Projection */}
+      <RetirementChart
+        baseResult={result}
+        retirementAge={input.retirementAge}
+        targetAge={input.targetAge}
+        comparisonMode={comparisonMode}
+        onToggleComparison={setComparisonMode}
+        annualReturn={input.annualReturn}
+        returnMode={input.returnMode ?? "fixed"}
+        actualByAge={actualByAge}
+        hideComparisonToggle
+      />
+
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
         <Button variant="outline" asChild>
           <Link to="/my-plan">
             <FileText className="h-4 w-4 mr-1.5" />
-            View My Plan
+            View My Retirement Plan
           </Link>
         </Button>
         <Button variant="outline" asChild>
