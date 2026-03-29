@@ -1,47 +1,42 @@
 
 
-## Refactor Home Page to Final Score-First Design
+## Refine Home to WHOOP-style Readiness Score UX
 
 ### Summary
 
-The current Home page is close to the target but needs: removal of the RetirementChart, replacement of "Balance at Retirement / Money Runs Out" cards with "Portfolio Value / Balance at Retirement" snapshot cards, addition of a "What to do next" action card, and reordering of sections.
+Increase visual dominance of the score, make the delta more prominent with color, reduce snapshot cards to a compact inline strip, and strengthen coaching suggestions with specific numbers.
 
 ### Changes — `src/pages/Home.tsx`
 
-**1. Remove RetirementChart** (lines 302-313)
-- Delete the `RetirementChart` import and its render block
-- Remove `comparisonMode` state, `actualByAge` memo, and the `RetirementChart` import
-- This eliminates the heavy projection chart from Home
+**1. Score Hero — increase visual weight**
+- Score number: `text-5xl` → `text-7xl` (largest element on page)
+- Move weekly delta directly below the score number (not top-right corner) with larger text (`text-base font-semibold`) and strong color (`text-green-500` / `text-red-500`)
+- Band badge stays next to score
+- Move sparkline up — render immediately after delta, before recommendation
+- Recommendation + target context: keep but ensure muted hierarchy
 
-**2. Replace plan summary cards** (lines 277-300)
-- Change from "Balance at Retirement + Money Runs Out" to "Portfolio Value + Balance at Retirement"
-- Card 1: Portfolio Value — move current portfolio mini card content here (latest `total_value`, return %)
-- Card 2: Balance at Retirement — keep existing projected balance at retirement age
-- Remove the standalone Portfolio Mini Card at the bottom (lines 337-363)
-- Remove `runsOutAge`/`runsOutRow` computation (no longer displayed)
+**2. Snapshot cards — reduce to compact inline strip**
+- Replace two full `Card` components with a single row of two inline stat blocks (no card borders)
+- Use a simple `div` with a subtle top border or separator instead of heavy cards
+- Smaller text: label `text-[11px]`, value `text-base font-semibold`, subtext `text-[11px]`
+- Layout: `flex gap-8` on one line, not grid of cards
 
-**3. Add "What to do next" action card** (new, between snapshot cards and quick actions)
-- Single card with 1-2 suggestions derived from score band:
-  - Off Pace / Needs Attention: "Consider increasing monthly savings" + "Review your retirement age target"
-  - On Track: "Stay consistent with your current savings plan"
-  - Strong / Excellent: "You're ahead of plan. Consider reviewing your risk allocation."
-  - Getting Started: "Keep contributing regularly to build momentum."
-- Simple helper function `getActionSuggestions(band): string[]`
+**3. Coaching — strengthen suggestions**
+- Update `getActionSuggestions` to include numbers derived from plan data:
+  - Accept `input` and `portfolioValue` as params
+  - Off Pace / Needs Attention: "Increase monthly savings by ~฿X,000" (compute gap between actual and planned monthly), "Consider delaying retirement by 1–2 years"
+  - On Track: "You're saving ฿X/month — stay consistent"
+  - Strong / Excellent: "You're ฿Xk ahead of plan. Consider reviewing risk allocation."
+  - Getting Started: "Start with ฿X/month to build momentum" (use planned monthly)
+- Pass `input` and `portfolioValue` to the function
 
-**4. Reorder sections** (top to bottom):
-1. Score Hero (unchanged)
-2. Snapshot cards (Portfolio Value + Balance at Retirement)
-3. What to do next
-4. Quick Actions (unchanged)
-
-**5. Cleanup unused imports**
-- Remove `RetirementChart`, `useState` (no more comparisonMode), unused icons if any
+**4. Quick actions — reduce visual weight**
+- Change from `Button variant="outline"` to `variant="ghost"` with smaller size (`size="sm"`)
+- More compact row
 
 ### What stays unchanged
-- Score computation logic, all fallbacks, MAX_AGE_DIFF guard
-- Score history recording
+- All score computation logic, simulation, history storage
+- MiniScoreHistory component (already has sparkline)
 - Empty state (HomeEmpty)
-- Quick action buttons (already correct order)
-- All other pages (My Plan, Retirement Planner, Dashboard)
-- Sidebar navigation
+- All other pages
 
