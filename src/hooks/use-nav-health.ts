@@ -31,6 +31,7 @@ export interface NavHealthSummary {
   syncStatus: string | null;
   syncCompletedAt: string | null;
   syncProvider: string | null;
+  syncErrorMessage: string | null;
 
   // Directory
   directoryCount: number;
