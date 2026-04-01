@@ -250,7 +250,7 @@ Deno.serve(async (req) => {
     messageParts.push("No historical gaps detected.");
   }
 
-  // ── Step 4: Trigger processor ──
+  // ── Step 5: Trigger processor ──
   let backfillProcessingTriggered = false;
 
   if (backfillJobsEnqueued > 0) {
