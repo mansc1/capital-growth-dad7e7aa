@@ -14,6 +14,8 @@ export interface UpdateNavDataResult {
   skippedFunds: number;
   backfillJobsEnqueued: number;
   backfillProcessingTriggered: boolean;
+  secReachable?: boolean | null;
+  errorCategory?: string | null;
 }
 
 export function useUpdateNavData() {

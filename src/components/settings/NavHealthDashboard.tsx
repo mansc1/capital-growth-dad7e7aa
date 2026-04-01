@@ -105,7 +105,17 @@ export function NavHealthDashboard() {
       return;
     }
 
-    if (!result.success) {
+    // SEC-specific connectivity messaging
+    if (result.secReachable === false) {
+      if (result.errorCategory === "auth") {
+        toast.error("SEC API authentication failed. Check your API key subscription.");
+      } else {
+        toast.warning(
+          "SEC API could not be reached. Your existing portfolio data is unaffected — only the NAV refresh was skipped.",
+          { duration: 8000 }
+        );
+      }
+    } else if (!result.success) {
       toast.error(`NAV update failed: ${result.message}`);
     } else if (result?.backfillJobsEnqueued > 0) {
       toast.success("NAV data updated. Historical NAV is being updated in the background.");
@@ -115,7 +125,9 @@ export function NavHealthDashboard() {
 
     if ((result?.warnings?.length ?? 0) > 0) {
       console.warn("[update-nav-data] warnings:", result.warnings);
-      toast.warning(`Completed with ${result.warnings.length} warning(s).`);
+      if (result.secReachable !== false) {
+        toast.warning(`Completed with ${result.warnings.length} warning(s).`);
+      }
     }
   };
 

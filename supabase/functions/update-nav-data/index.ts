@@ -294,6 +294,8 @@ Deno.serve(async (req) => {
       skippedFunds,
       backfillJobsEnqueued,
       backfillProcessingTriggered,
+      secReachable,
+      errorCategory: secErrorCategory,
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
