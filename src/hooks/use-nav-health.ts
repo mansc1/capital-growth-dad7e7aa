@@ -53,6 +53,7 @@ const EMPTY_SUMMARY: NavHealthSummary = {
   syncStatus: null,
   syncCompletedAt: null,
   syncProvider: null,
+  syncErrorMessage: null,
   directoryCount: 0,
   alerts: [],
 };
