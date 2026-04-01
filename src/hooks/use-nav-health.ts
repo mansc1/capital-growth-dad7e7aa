@@ -178,11 +178,12 @@ export function useNavHealth() {
       let syncStatus: string | null = null;
       let syncCompletedAt: string | null = null;
       let syncProvider: string | null = null;
+      let syncErrorMessage: string | null = null;
 
       try {
         const { data, error } = await supabase
           .from("sync_runs" as any)
-          .select("status, completed_at, provider")
+          .select("status, completed_at, provider, error_message")
           .order("started_at", { ascending: false })
           .limit(1);
 
@@ -193,6 +194,7 @@ export function useNavHealth() {
           syncStatus = run.status;
           syncCompletedAt = run.completed_at;
           syncProvider = run.provider;
+          syncErrorMessage = run.error_message ?? null;
         }
       } catch (err) {
         console.error("[nav-health] Section C (sync) failed:", err);
