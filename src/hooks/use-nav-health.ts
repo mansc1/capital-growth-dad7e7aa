@@ -249,6 +249,18 @@ export function useNavHealth() {
         });
       }
 
+      // SEC connectivity alert from sync error message
+      if (syncStatus === "failed" && syncErrorMessage) {
+        const lowerErr = syncErrorMessage.toLowerCase();
+        if (lowerErr.includes("dns") || lowerErr.includes("network") || lowerErr.includes("failed to lookup")) {
+          alerts.push({
+            severity: "warning",
+            key: "secUnreachable",
+            message: "SEC API could not be reached during the last sync attempt",
+          });
+        }
+      }
+
       return {
         trackedFunds,
         readyFunds,
