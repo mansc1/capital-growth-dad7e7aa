@@ -274,6 +274,7 @@ export function useNavHealth() {
         syncStatus,
         syncCompletedAt,
         syncProvider,
+        syncErrorMessage,
         directoryCount,
         alerts,
       };
