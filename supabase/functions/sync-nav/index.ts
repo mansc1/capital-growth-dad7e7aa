@@ -178,11 +178,39 @@ Deno.serve(async (req) => {
 
     // 6. Call provider with only resolved codes
     let navResults;
+    let secUnreachable = false;
+    let errorCategory: string | null = null;
+    let errorSummary: { networkErrors: number; authErrors: number; dataErrors: number; unknownErrors: number } | null = null;
+
     if (resolvedLookupCodes.length > 0) {
       try {
         navResults = await providerInstance!.fetchLatestNavForFunds(resolvedLookupCodes, projIdMap);
+
+        // Extract error summary if available (SEC provider attaches it)
+        const summary = (navResults as any)?.__errorSummary;
+        if (summary) {
+          errorSummary = summary;
+          const totalErrors = summary.networkErrors + summary.authErrors + summary.dataErrors + summary.unknownErrors;
+          if (totalErrors > 0 && navResults.length === 0) {
+            // All funds failed
+            if (summary.networkErrors >= summary.authErrors && summary.networkErrors >= summary.dataErrors) {
+              secUnreachable = true;
+              errorCategory = "network";
+            } else if (summary.authErrors > 0) {
+              errorCategory = "auth";
+            } else {
+              errorCategory = "partial";
+            }
+          } else if (totalErrors > 0) {
+            errorCategory = "partial";
+          }
+        }
       } catch (providerErr) {
         const errorMsg = `Provider "${providerName}" failed: ${(providerErr as Error).message}`;
+        const isNetwork = /dns|network|econnrefused|enotfound|failed to lookup/i.test(errorMsg);
+        secUnreachable = isNetwork;
+        errorCategory = isNetwork ? "network" : "unknown";
+
         await supabase
           .from("sync_runs")
           .update({
@@ -194,7 +222,7 @@ Deno.serve(async (req) => {
           .eq("id", syncRunId);
 
         return new Response(
-          JSON.stringify({ success: false, processedFunds, insertedRows, updatedRows, skippedFunds, latestNavDate, syncRunId, provider: providerName, errors: [errorMsg, ...errors] }),
+          JSON.stringify({ success: false, processedFunds, insertedRows, updatedRows, skippedFunds, latestNavDate, syncRunId, provider: providerName, errors: [errorMsg, ...errors], secUnreachable, errorCategory, errorSummary }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -298,7 +326,7 @@ Deno.serve(async (req) => {
       .eq("id", syncRunId);
 
     return new Response(
-      JSON.stringify({ success: errors.length === 0, processedFunds, insertedRows, updatedRows, skippedFunds, latestNavDate, syncRunId, provider: providerName, errors }),
+      JSON.stringify({ success: errors.length === 0, processedFunds, insertedRows, updatedRows, skippedFunds, latestNavDate, syncRunId, provider: providerName, errors, secUnreachable, errorCategory, errorSummary }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {

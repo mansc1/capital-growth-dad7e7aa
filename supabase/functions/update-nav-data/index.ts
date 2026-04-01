@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
+import { SecApiClient } from "../_shared/sec-api/client.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -174,7 +174,24 @@ Deno.serve(async (req) => {
     messageParts.push("Directory refresh failed.");
   }
 
-  // ── Step 2: NAV sync ──
+  // ── Step 2: Pre-flight SEC connectivity check ──
+  let secReachable: boolean | null = null;
+  let secErrorCategory: string | null = null;
+
+  try {
+    const connectivity = await SecApiClient.checkConnectivity("[update-nav-data]");
+    secReachable = connectivity.reachable;
+    if (!connectivity.reachable) {
+      secErrorCategory = connectivity.category ?? "network";
+      warnings.push(`SEC API is unreachable from the sync runtime (${connectivity.category ?? "network"} error: ${connectivity.error ?? "unknown"}). NAV data cannot be refreshed at this time.`);
+      messageParts.push("SEC API unreachable.");
+    }
+  } catch (err) {
+    console.warn("[update-nav-data] Connectivity check exception:", (err as Error).message);
+    // Best-effort: still attempt sync
+  }
+
+  // ── Step 3: NAV sync (best-effort even if pre-flight failed) ──
   let navSyncRan = false;
   let insertedRows = 0;
   let updatedRows = 0;
@@ -197,6 +214,16 @@ Deno.serve(async (req) => {
       messageParts.push("NAV sync failed.");
     } else {
       const syncData = await syncRes.json();
+
+      // Pass through SEC connectivity info from sync-nav
+      if (syncData?.secUnreachable && secReachable !== false) {
+        secReachable = false;
+        secErrorCategory = syncData.errorCategory ?? "network";
+      }
+      if (syncData?.errorCategory && !secErrorCategory) {
+        secErrorCategory = syncData.errorCategory;
+      }
+
       if (syncData?.success) {
         navSyncRan = true;
         insertedRows = syncData.insertedRows ?? 0;
@@ -214,7 +241,7 @@ Deno.serve(async (req) => {
     messageParts.push("NAV sync failed.");
   }
 
-  // ── Step 3: Gap detection & backfill enqueue ──
+  // ── Step 4: Gap detection & backfill enqueue ──
   const { backfillJobsEnqueued } = await detectAndEnqueueBackfill(supabase, warnings);
 
   if (backfillJobsEnqueued > 0) {
@@ -223,7 +250,7 @@ Deno.serve(async (req) => {
     messageParts.push("No historical gaps detected.");
   }
 
-  // ── Step 4: Trigger processor ──
+  // ── Step 5: Trigger processor ──
   let backfillProcessingTriggered = false;
 
   if (backfillJobsEnqueued > 0) {
@@ -267,6 +294,8 @@ Deno.serve(async (req) => {
       skippedFunds,
       backfillJobsEnqueued,
       backfillProcessingTriggered,
+      secReachable,
+      errorCategory: secErrorCategory,
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );

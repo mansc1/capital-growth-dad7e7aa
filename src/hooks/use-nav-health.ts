@@ -31,6 +31,7 @@ export interface NavHealthSummary {
   syncStatus: string | null;
   syncCompletedAt: string | null;
   syncProvider: string | null;
+  syncErrorMessage: string | null;
 
   // Directory
   directoryCount: number;
@@ -52,6 +53,7 @@ const EMPTY_SUMMARY: NavHealthSummary = {
   syncStatus: null,
   syncCompletedAt: null,
   syncProvider: null,
+  syncErrorMessage: null,
   directoryCount: 0,
   alerts: [],
 };
@@ -176,11 +178,12 @@ export function useNavHealth() {
       let syncStatus: string | null = null;
       let syncCompletedAt: string | null = null;
       let syncProvider: string | null = null;
+      let syncErrorMessage: string | null = null;
 
       try {
         const { data, error } = await supabase
           .from("sync_runs" as any)
-          .select("status, completed_at, provider")
+          .select("status, completed_at, provider, error_message")
           .order("started_at", { ascending: false })
           .limit(1);
 
@@ -191,6 +194,7 @@ export function useNavHealth() {
           syncStatus = run.status;
           syncCompletedAt = run.completed_at;
           syncProvider = run.provider;
+          syncErrorMessage = run.error_message ?? null;
         }
       } catch (err) {
         console.error("[nav-health] Section C (sync) failed:", err);
@@ -245,6 +249,18 @@ export function useNavHealth() {
         });
       }
 
+      // SEC connectivity alert from sync error message
+      if (syncStatus === "failed" && syncErrorMessage) {
+        const lowerErr = syncErrorMessage.toLowerCase();
+        if (lowerErr.includes("dns") || lowerErr.includes("network") || lowerErr.includes("failed to lookup")) {
+          alerts.push({
+            severity: "warning",
+            key: "secUnreachable",
+            message: "SEC API could not be reached during the last sync attempt",
+          });
+        }
+      }
+
       return {
         trackedFunds,
         readyFunds,
@@ -258,6 +274,7 @@ export function useNavHealth() {
         syncStatus,
         syncCompletedAt,
         syncProvider,
+        syncErrorMessage,
         directoryCount,
         alerts,
       };

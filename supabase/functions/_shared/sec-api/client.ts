@@ -16,6 +16,27 @@ const MAX_RETRIES = 2;
 const BACKOFF_BASE_MS = 500;
 const REQUEST_TIMEOUT_MS = 15_000;
 const THROTTLE_DELAY_MS = 200;
+const CONNECTIVITY_TIMEOUT_MS = 8_000;
+
+// ---------------------------------------------------------------------------
+// Error categories
+// ---------------------------------------------------------------------------
+
+export type SecErrorCategory =
+  | "network"
+  | "auth"
+  | "empty_response"
+  | "parse_error"
+  | "unknown";
+
+export class SecApiError extends Error {
+  category: SecErrorCategory;
+  constructor(message: string, category: SecErrorCategory) {
+    super(message);
+    this.name = "SecApiError";
+    this.category = category;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,7 +85,10 @@ export async function fetchWithRetry(
     }
   }
 
-  throw lastError ?? new Error(`fetchWithRetry failed for ${url}`);
+  // Classify the error
+  const msg = lastError?.message ?? `fetchWithRetry failed for ${url}`;
+  const isNetwork = /dns|network|econnrefused|enotfound|timeout|abort|failed to lookup/i.test(msg);
+  throw new SecApiError(msg, isNetwork ? "network" : "unknown");
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +155,18 @@ export interface SecFundRecord {
   proj_name_th?: string;
 }
 
+export interface ConnectivityResult {
+  reachable: boolean;
+  error?: string;
+  category?: SecErrorCategory;
+}
+
+export interface DailyNavResult {
+  navPerUnit: number | null;
+  status: "ok" | "no_data" | "error" | "auth_error";
+  category: SecErrorCategory | null;
+}
+
 export class SecApiClient {
   public readonly baseUrl: string;
   private readonly apiKey: string;
@@ -149,6 +185,34 @@ export class SecApiClient {
       "Ocp-Apim-Subscription-Key": this.apiKey,
       Accept: "application/json",
     };
+  }
+
+  // ---- Connectivity check -------------------------------------------------
+
+  static async checkConnectivity(logPrefix = "[SEC]"): Promise<ConnectivityResult> {
+    const baseUrl = Deno.env.get("SEC_API_BASE_URL") || DEFAULT_BASE_URL;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CONNECTIVITY_TIMEOUT_MS);
+
+    try {
+      console.log(`${logPrefix} Connectivity check → ${baseUrl}`);
+      const res = await fetch(baseUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      console.log(`${logPrefix} Connectivity check: HTTP ${res.status}`);
+      // Any HTTP response means DNS resolved and network is reachable
+      await res.text(); // consume body
+      return { reachable: true };
+    } catch (err) {
+      clearTimeout(timeout);
+      const msg = (err as Error).message;
+      const isNetwork = /dns|network|econnrefused|enotfound|timeout|abort|failed to lookup/i.test(msg);
+      console.error(`${logPrefix} Connectivity check failed: ${msg}`);
+      return {
+        reachable: false,
+        error: msg,
+        category: isNetwork ? "network" : "unknown",
+      };
+    }
   }
 
   // ---- FundFactsheet endpoints (used by sync-sec-fund-directory) ----------
@@ -187,39 +251,48 @@ export class SecApiClient {
 
   /**
    * Fetch daily NAV for a single fund on a specific date.
-   * Returns the NAV per unit or null if no data / error.
+   * Returns the NAV per unit or null if no data / error, with error category.
    */
   async fetchDailyNav(
     projId: string,
     dateStr: string,
     logPrefix = "[SEC]",
-  ): Promise<{ navPerUnit: number; status: "ok" } | { navPerUnit: null; status: "no_data" | "error" | "auth_error" }> {
+  ): Promise<DailyNavResult> {
     const url = `${this.baseUrl}/FundDailyInfo/${projId}/dailynav/${dateStr}`;
-    const res = await fetchWithRetry(url, this.headers, MAX_RETRIES, logPrefix);
+
+    let res: Response;
+    try {
+      res = await fetchWithRetry(url, this.headers, MAX_RETRIES, logPrefix);
+    } catch (err) {
+      if (err instanceof SecApiError) {
+        return { navPerUnit: null, status: "error", category: err.category };
+      }
+      return { navPerUnit: null, status: "error", category: "network" };
+    }
 
     // 204 = no data for this date (holiday/weekend)
     if (res.status === 204) {
       await res.text(); // consume body
-      return { navPerUnit: null, status: "no_data" };
+      return { navPerUnit: null, status: "no_data", category: "empty_response" };
     }
 
     if (!res.ok) {
       await res.text(); // consume body
       if (res.status === 401) {
         console.error(`${logPrefix} 401 on FundDailyInfo — ensure your API key is subscribed to "Fund Daily Info" product`);
-        return { navPerUnit: null, status: "auth_error" };
+        return { navPerUnit: null, status: "auth_error", category: "auth" };
       }
-      return { navPerUnit: null, status: "error" };
+      return { navPerUnit: null, status: "error", category: "unknown" };
     }
 
     const data = await res.json();
     const navPerUnit = parseDailyNavResponse(data, `projId=${projId} date=${dateStr}`);
 
     if (navPerUnit === null) {
-      return { navPerUnit: null, status: "no_data" };
+      return { navPerUnit: null, status: "no_data", category: "empty_response" };
     }
 
-    return { navPerUnit, status: "ok" };
+    return { navPerUnit, status: "ok", category: null };
   }
 }
 

@@ -1,7 +1,20 @@
 import type { NavProvider, NavResult } from "../types.ts";
-import { SecApiClient, delay, THROTTLE_DELAY_MS } from "../../sec-api/client.ts";
+import { SecApiClient, SecApiError, delay, THROTTLE_DELAY_MS } from "../../sec-api/client.ts";
+import type { SecErrorCategory } from "../../sec-api/client.ts";
 
 const NORM = (s: string): string => s.trim().toUpperCase();
+
+export interface SecErrorSummary {
+  networkErrors: number;
+  authErrors: number;
+  dataErrors: number;
+  unknownErrors: number;
+}
+
+export interface SecProviderResult {
+  results: NavResult[];
+  errorSummary: SecErrorSummary;
+}
 
 /**
  * SEC Thailand NAV Provider
@@ -50,6 +63,13 @@ export class SecThNavProvider implements NavProvider {
         }
 
         if (result.status === "no_data" || result.status === "error") {
+          // If it's a network error, don't keep retrying different dates
+          if (result.category === "network") {
+            throw new SecApiError(
+              `Network error fetching ${fundCode} (proj_id=${projId})`,
+              "network"
+            );
+          }
           await delay(THROTTLE_DELAY_MS);
           continue;
         }
@@ -57,7 +77,7 @@ export class SecThNavProvider implements NavProvider {
         return {
           fundCode,
           navDate: dateStr,
-          navPerUnit: result.navPerUnit,
+          navPerUnit: result.navPerUnit!,
           source: "sec_th",
         };
       }
@@ -65,8 +85,12 @@ export class SecThNavProvider implements NavProvider {
       console.warn(`[SEC] No NAV data found for ${fundCode} (proj_id=${projId}) in last 5 days`);
       return null;
     } catch (err) {
+      if (err instanceof SecApiError) throw err;
       console.error(`[SEC] Error fetching ${fundCode} (proj_id=${projId}):`, err);
-      return null;
+      throw new SecApiError(
+        `Error fetching ${fundCode}: ${(err as Error).message}`,
+        "unknown"
+      );
     }
   }
 
@@ -76,6 +100,13 @@ export class SecThNavProvider implements NavProvider {
     }
 
     const results: NavResult[] = [];
+    const errorSummary: SecErrorSummary = {
+      networkErrors: 0,
+      authErrors: 0,
+      dataErrors: 0,
+      unknownErrors: 0,
+    };
+
     for (let i = 0; i < fundCodes.length; i++) {
       const code = fundCodes[i];
       const projId = projIdMap.get(NORM(code));
@@ -85,13 +116,35 @@ export class SecThNavProvider implements NavProvider {
         continue;
       }
 
-      const result = await this.fetchLatestNavForFund(code, projId);
-      if (result) results.push(result);
+      try {
+        const result = await this.fetchLatestNavForFund(code, projId);
+        if (result) results.push(result);
+      } catch (err) {
+        if (err instanceof SecApiError) {
+          console.error(`[SEC] ${err.category} error for ${code}: ${err.message}`);
+          switch (err.category) {
+            case "network": errorSummary.networkErrors++; break;
+            case "auth": errorSummary.authErrors++; break;
+            case "empty_response":
+            case "parse_error": errorSummary.dataErrors++; break;
+            default: errorSummary.unknownErrors++; break;
+          }
+        } else {
+          console.error(`[SEC] Unknown error for ${code}:`, err);
+          errorSummary.unknownErrors++;
+        }
+      }
 
       if (i < fundCodes.length - 1) {
         await delay(THROTTLE_DELAY_MS);
       }
     }
+
+    // Attach error summary to results for upstream consumption
+    (results as any).__errorSummary = errorSummary;
+
     return results;
   }
 }
+
+export { SecApiError };
