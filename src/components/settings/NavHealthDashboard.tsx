@@ -2,22 +2,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, XCircle, Clock, Loader2, RefreshCw } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Loader2, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { useNavHealth, type NavHealthSummary } from "@/hooks/use-nav-health";
 import { useUpdateNavData } from "@/hooks/use-update-nav-data";
+import { useSecConnectivity } from "@/hooks/use-sec-connectivity";
 import { toast } from "sonner";
 
-// --- Health banner logic (kept together for maintainability) ---
+// --- Health banner logic ---
 
-type HealthStatus = "healthy" | "warning" | "error";
+type HealthStatus = "healthy" | "warning" | "error" | "sec_unreachable";
 
 function computeHealthStatus(data: NavHealthSummary): HealthStatus {
+  if (data.secUnreachable) return "sec_unreachable";
   if (data.failedJobs > 0 || data.navUnavailableFunds > 0) return "error";
   if (data.waitingForNavFunds > 0 || data.staleFunds > 0) return "warning";
   return "healthy";
 }
 
-const STATUS_CONFIG: Record<HealthStatus, { bg: string; dot: string; text: string; label: string }> = {
+const STATUS_CONFIG: Record<HealthStatus, { bg: string; dot: string; text: string; label: string; body?: string }> = {
   healthy: {
     bg: "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800",
     dot: "bg-green-500",
@@ -36,6 +38,13 @@ const STATUS_CONFIG: Record<HealthStatus, { bg: string; dot: string; text: strin
     text: "text-red-700 dark:text-red-400",
     label: "Issues detected",
   },
+  sec_unreachable: {
+    bg: "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800",
+    dot: "bg-red-500",
+    text: "text-red-700 dark:text-red-400",
+    label: "SEC API unreachable",
+    body: "The sync runtime could not reach the SEC API. Your existing portfolio data is unchanged, but NAV refresh cannot complete right now.",
+  },
 };
 
 // --- Helpers ---
@@ -45,6 +54,19 @@ function formatProvider(provider: string | null | undefined): string {
   if (provider === "sec") return "SEC Thailand";
   if (provider === "mock") return "Mock";
   return provider;
+}
+
+function deriveFailureReason(errorMessage: string | null): string | null {
+  if (!errorMessage) return null;
+  const lower = errorMessage.toLowerCase();
+  if (lower.includes("dns") || lower.includes("network") || lower.includes("failed to lookup")) {
+    return "SEC API unreachable from sync runtime";
+  }
+  if (lower.includes("auth") || lower.includes("401") || lower.includes("403") || lower.includes("subscription")) {
+    return "SEC API authentication failed";
+  }
+  // Truncated raw message as fallback
+  return errorMessage.length > 120 ? errorMessage.slice(0, 120) + "…" : errorMessage;
 }
 
 function SyncStatusBadge({ status }: { status: string | null }) {
@@ -96,6 +118,7 @@ function LoadingSkeleton() {
 export function NavHealthDashboard() {
   const { data, isLoading } = useNavHealth();
   const { updateNavData, isLoading: updating } = useUpdateNavData();
+  const { check: checkConnectivity, isLoading: checking } = useSecConnectivity();
 
   const handleUpdateNavData = async () => {
     const result = await updateNavData();
@@ -105,7 +128,6 @@ export function NavHealthDashboard() {
       return;
     }
 
-    // SEC-specific connectivity messaging
     if (result.secReachable === false) {
       if (result.errorCategory === "auth") {
         toast.error("SEC API authentication failed. Check your API key subscription.");
@@ -131,6 +153,21 @@ export function NavHealthDashboard() {
     }
   };
 
+  const handleTestConnection = async () => {
+    const result = await checkConnectivity();
+    if (!result) {
+      toast.error("Could not run connectivity check. Try again.");
+      return;
+    }
+    if (result.reachable) {
+      toast.success("SEC API is reachable.");
+    } else if (result.category === "auth") {
+      toast.warning("SEC API reachable, but authentication failed.");
+    } else {
+      toast.error("SEC API could not be reached from the sync runtime.");
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -149,9 +186,14 @@ export function NavHealthDashboard() {
               const status = computeHealthStatus(data);
               const cfg = STATUS_CONFIG[status];
               return (
-                <div className={`flex items-center gap-2.5 rounded-md border px-4 py-2.5 ${cfg.bg}`}>
-                  <span className={`h-2 w-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-                  <span className={`text-sm font-medium ${cfg.text}`}>{cfg.label}</span>
+                <div className={`rounded-md border px-4 py-2.5 ${cfg.bg}`}>
+                  <div className="flex items-center gap-2.5">
+                    <span className={`h-2 w-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                    <span className={`text-sm font-medium ${cfg.text}`}>{cfg.label}</span>
+                  </div>
+                  {cfg.body && (
+                    <p className={`text-xs mt-1.5 ml-[18px] ${cfg.text} opacity-80`}>{cfg.body}</p>
+                  )}
                 </div>
               );
             })()}
@@ -219,6 +261,12 @@ export function NavHealthDashboard() {
                 <p className="text-xs text-muted-foreground">
                   {formatProvider(data.syncProvider)}
                 </p>
+                {/* Failure reason */}
+                {data.syncStatus === "failed" && data.syncErrorMessage && (
+                  <p className="text-xs text-destructive mt-1">
+                    Reason: {deriveFailureReason(data.syncErrorMessage)}
+                  </p>
+                )}
               </div>
 
               {/* SEC Directory */}
@@ -264,6 +312,28 @@ export function NavHealthDashboard() {
               </div>
             </div>
 
+            {/* Collapsible diagnostics (only when sync failed) */}
+            {data.syncStatus === "failed" && (
+              <details className="text-xs text-muted-foreground border rounded-md px-3 py-2">
+                <summary className="cursor-pointer font-medium text-foreground select-none">
+                  Diagnostics
+                </summary>
+                <div className="mt-2 space-y-1 pl-1">
+                  <p>SEC reachable: {data.secUnreachable ? "No" : "Unknown"}</p>
+                  {data.syncCompletedAt && (
+                    <p>Last sync: {new Date(data.syncCompletedAt).toLocaleString()}</p>
+                  )}
+                  {data.syncErrorMessage && (
+                    <p className="break-all">
+                      Error: {data.syncErrorMessage.length > 120
+                        ? data.syncErrorMessage.slice(0, 120) + "…"
+                        : data.syncErrorMessage}
+                    </p>
+                  )}
+                </div>
+              </details>
+            )}
+
             {/* Background job indicator */}
             {data.pendingJobs + data.processingJobs > 0 && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -275,11 +345,24 @@ export function NavHealthDashboard() {
               </div>
             )}
 
-            {/* Update button */}
-            <div className="pt-1">
+            {/* Action buttons */}
+            <div className="pt-1 flex items-center gap-2">
               <Button onClick={handleUpdateNavData} disabled={updating} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-2 ${updating ? "animate-spin" : ""}`} />
                 {updating ? "Updating…" : "Update NAV Data"}
+              </Button>
+              <Button
+                onClick={handleTestConnection}
+                disabled={checking}
+                size="sm"
+                variant="ghost"
+              >
+                {checking ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Wifi className="h-4 w-4 mr-2" />
+                )}
+                {checking ? "Testing…" : "Test SEC Connection"}
               </Button>
             </div>
           </>
