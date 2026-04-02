@@ -36,6 +36,9 @@ export interface NavHealthSummary {
   // Directory
   directoryCount: number;
 
+  // SEC connectivity
+  secUnreachable: boolean;
+
   // Alerts
   alerts: HealthAlert[];
 }
