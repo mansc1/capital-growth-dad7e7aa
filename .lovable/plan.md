@@ -1,74 +1,58 @@
-## Add SEC Connectivity Diagnostics + Graceful Error Reporting
+
+
+## Make SEC Connectivity Failure Visible and Actionable in Settings UI
 
 ### Summary
 
-Classify SEC fetch errors into structured categories, surface connectivity failures clearly in the sync result payload and NAV Health UI, and add a lightweight SEC reachability check to the update-nav-data orchestration.
+Enhance the NAV Health Dashboard to clearly surface SEC connectivity failures with specific messaging, add a standalone "Test SEC Connection" button, prioritize network alerts over downstream symptoms, and add a collapsible diagnostics section.
 
 ### Changes
 
-**1. `supabase/functions/_shared/sec-api/client.ts**` — Structured error categories
+**1. `src/hooks/use-sec-connectivity.ts`** — New hook for standalone connectivity test
 
-- Add an exported enum/union type `SecErrorCategory`: `"network"` | `"auth"` | `"empty_response"` | `"parse_error"` | `"unknown"`
-- In `fetchWithRetry`, catch network/DNS errors and throw a typed error (or return a tagged result) with `category: "network"` and the raw message
-- In `fetchDailyNav`, map the existing statuses to categories: `auth_error` → `"auth"`, `no_data` → `"empty_response"`, network catch → `"network"`
-- Add a new method `checkConnectivity(logPrefix?)`: does a single lightweight fetch (e.g., HEAD or GET to the base URL) with a short timeout, returns `{ reachable: boolean; error?: string; category?: SecErrorCategory }`
+- Call the `update-nav-data` edge function with a query param like `?connectivityOnly=true`, or create a tiny new edge function `check-sec-connectivity` that only runs `SecApiClient.checkConnectivity()` and returns the result
+- Prefer a new minimal edge function (`check-sec-connectivity`) to avoid triggering any sync logic
+- Returns `{ reachable: boolean; error?: string; category?: string; isLoading: boolean; check: () => Promise<void> }`
 
-**2. `supabase/functions/_shared/nav/providers/sec.ts**` — Track error categories per fund
+**2. `supabase/functions/check-sec-connectivity/index.ts`** — New lightweight edge function
 
-- In `fetchLatestNavForFunds`, when a fund fails, capture the error category from the client
-- Accumulate a summary: `{ networkErrors: number; authErrors: number; dataErrors: number }`
-- Attach this summary to the thrown error or return it alongside results (add an optional `errorSummary` field to the return)
+- Import `SecApiClient` from shared client
+- Instantiate, call `checkConnectivity()`
+- Return JSON: `{ reachable, error, category, baseUrl (masked) }`
+- No sync, no DB writes, no auth required
+- CORS headers as usual
 
-**3. `supabase/functions/sync-nav/index.ts**` — Surface connectivity in response
+**3. `src/hooks/use-nav-health.ts`** — Prioritize SEC connectivity alerts
 
-- After the provider call (line ~183), if all funds failed with network errors, set a top-level `secUnreachable: true` flag in the response JSON
-- Add `errorCategory` field to the response: `"network"` | `"auth"` | `"partial"` | `null`
-- Log: SEC base URL, error category, retry count, exact error string for each fund
+- In the alerts builder, move the `secUnreachable` alert to the **top** of the alerts array (before navUnavailable, failedJobs)
+- When `secUnreachable` is present, downgrade `navUnavailable` and `staleFunds` alerts from their current severity to supplementary context (keep them but move after the SEC alert)
+- Expose a computed `secUnreachable: boolean` flag on `NavHealthSummary` for easy consumption
 
-**4. `supabase/functions/update-nav-data/index.ts**` — Pre-flight connectivity check + pass-through
+**4. `src/components/settings/NavHealthDashboard.tsx`** — Major UI enhancements
 
-- Before Step 2 (NAV sync), call `SecApiClient.checkConnectivity()` and log the result
-- If unreachable, add a specific warning: `"SEC API is unreachable from the sync runtime (DNS/network error). NAV data cannot be refreshed at this time."`
-- Still attempt sync (best-effort), but set a top-level `secReachable: false` in the response
-- Pass through `secUnreachable` / `errorCategory` from sync-nav response
+- **Health banner**: When `data.secUnreachable` is true, override the banner to show "SEC API unreachable" with body text: "The sync runtime could not reach the SEC API. Your existing portfolio data is unchanged, but NAV refresh cannot complete right now."
+- **Latest Sync section**: Below the SyncStatusBadge, when `syncStatus === "failed"` and `syncErrorMessage` exists, show a diagnostic line: "Failure reason: SEC API unreachable from sync runtime" (or auth-specific, or raw message as fallback). Derive the label from `syncErrorMessage` keywords (dns/network → "SEC API unreachable", auth → "SEC API authentication failed", else → truncated raw message)
+- **Test SEC Connection button**: Add a secondary/ghost button next to "Update NAV Data". On click, call the `useSecConnectivity` hook's `check()`. Show toast with result: success → "SEC API is reachable", network → "SEC API could not be reached from the sync runtime", auth → "SEC API reachable, but authentication failed"
+- **Collapsible diagnostics**: Below alerts, add a small `<details>` or similar collapsible section labeled "Diagnostics" showing: error category, secReachable flag, last sync timestamp, and a truncated error snippet (first 120 chars of `syncErrorMessage`). Only render when `syncStatus === "failed"`
 
-**5. `src/hooks/use-update-nav-data.ts**` — Extend result type
+**5. Alert ordering in the Alerts grid cell**
 
-- Add optional fields to `UpdateNavDataResult`: `secReachable?: boolean`, `errorCategory?: string`
+- SEC connectivity alert first (if present)
+- Then failed jobs
+- Then nav unavailable
+- Then stale/waiting
 
-**6. `src/components/settings/NavHealthDashboard.tsx**` — Clearer failure messaging
+### File summary
 
-- In `handleUpdateNavData`, check `result.secReachable === false`:
-  - Show toast: "SEC API could not be reached. Your existing portfolio data is unaffected — only the NAV refresh was skipped."
-- In `handleUpdateNavData`, check `result.errorCategory === "auth"`:
-  - Show toast: "SEC API authentication failed. Check your API key subscription."
-- Keep existing warning/success toasts for other cases
-- In the alerts section, if sync failed with a network error category, show: "SEC API could not be reached from the sync runtime" instead of generic "X funds with no NAV data"
-
-**7. `src/hooks/use-nav-health.ts**` — Pass sync error context
-
-- When reading the latest sync_run, also read `error_message`
-- Expose `syncErrorMessage: string | null` in `NavHealthSummary`
-- In alerts generation, if `syncStatus === "failed"` and error message contains "dns" or "network" (case-insensitive), add an alert: `{ severity: "warning", key: "secUnreachable", message: "SEC API could not be reached during the last sync attempt" }`
+| File | Action |
+|------|--------|
+| `supabase/functions/check-sec-connectivity/index.ts` | Create |
+| `src/hooks/use-sec-connectivity.ts` | Create |
+| `src/hooks/use-nav-health.ts` | Modify (alert priority, `secUnreachable` flag) |
+| `src/components/settings/NavHealthDashboard.tsx` | Modify (banner, failure reason, test button, diagnostics) |
 
 ### What stays unchanged
+- All sync/NAV logic, score computation, simulation
+- update-nav-data edge function
+- All other pages and hooks
 
-- NAV business logic, score computation, simulation
-- All page layouts except the toast messages in NavHealthDashboard
-- SEC API client base URL, retry logic structure
-- All other pages and hooks  
-
-
-Additional guard rails:
-
-- In checkConnectivity(), prefer a lightweight GET over HEAD unless HEAD is confirmed to work reliably with the SEC gateway.
-
-- Treat structured `errorCategory` from the shared SEC client as the primary source of truth. Use frontend string matching only as a fallback for older sync records.
-
-- Only set `secUnreachable: true` at the top level when the sync run is dominantly or entirely blocked by network/DNS failures, not when only a subset of funds fail.
-
-- If multiple error types occur in one sync run, expose `errorCategory` as the dominant category and keep a separate `errorSummary` object with per-category counts.
-
-- Keep the pre-flight connectivity check best-effort only; do not skip the actual sync solely because the pre-flight check fails.
-
-- Ensure UI copy clearly distinguishes network reachability issues, SEC auth/subscription issues, and empty/no-data responses.
