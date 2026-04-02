@@ -218,22 +218,40 @@ export function useNavHealth() {
         console.error("[nav-health] Section D (directory) failed:", err);
       }
 
-      // --- Build alerts (deterministic: errors first, then warnings) ---
+      // --- Build alerts (priority: SEC connectivity > errors > warnings) ---
       const alerts: HealthAlert[] = [];
 
-      // Errors
-      if (navUnavailableFunds > 0) {
+      // Detect SEC unreachable from sync error
+      let secUnreachable = false;
+      if (syncStatus === "failed" && syncErrorMessage) {
+        const lowerErr = syncErrorMessage.toLowerCase();
+        if (lowerErr.includes("dns") || lowerErr.includes("network") || lowerErr.includes("failed to lookup")) {
+          secUnreachable = true;
+        }
+      }
+
+      // SEC connectivity alert first (highest priority)
+      if (secUnreachable) {
         alerts.push({
           severity: "error",
-          key: "navUnavailable",
-          message: `${navUnavailableFunds} fund${navUnavailableFunds !== 1 ? "s" : ""} with no NAV data available`,
+          key: "secUnreachable",
+          message: "SEC API could not be reached during the last sync attempt",
         });
       }
+
+      // Errors
       if (failedJobs > 0) {
         alerts.push({
           severity: "error",
           key: "failedJobs",
           message: `${failedJobs} backfill job${failedJobs !== 1 ? "s" : ""} failed`,
+        });
+      }
+      if (navUnavailableFunds > 0) {
+        alerts.push({
+          severity: secUnreachable ? "warning" : "error",
+          key: "navUnavailable",
+          message: `${navUnavailableFunds} fund${navUnavailableFunds !== 1 ? "s" : ""} with no NAV data available`,
         });
       }
 
@@ -253,18 +271,6 @@ export function useNavHealth() {
         });
       }
 
-      // SEC connectivity alert from sync error message
-      if (syncStatus === "failed" && syncErrorMessage) {
-        const lowerErr = syncErrorMessage.toLowerCase();
-        if (lowerErr.includes("dns") || lowerErr.includes("network") || lowerErr.includes("failed to lookup")) {
-          alerts.push({
-            severity: "warning",
-            key: "secUnreachable",
-            message: "SEC API could not be reached during the last sync attempt",
-          });
-        }
-      }
-
       return {
         trackedFunds,
         readyFunds,
@@ -280,6 +286,7 @@ export function useNavHealth() {
         syncProvider,
         syncErrorMessage,
         directoryCount,
+        secUnreachable,
         alerts,
       };
     },
